@@ -1,6 +1,6 @@
 import { Entity, Column, Index, OneToMany } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity.js';
-import type { RefreshToken } from '../../auth/entities/refresh-token.entity.js';
+import { RefreshToken } from '../../auth/entities/refresh-token.entity.js';
 
 @Entity('users')
 @Index('UQ_users_email_isDeleted', ['email'], { unique: true, where: '"isDeleted" = false' })
@@ -26,6 +26,6 @@ export class User extends BaseEntity {
   @Column({ type: 'timestamptz', nullable: true, default: null })
   lastLoginAt: Date | null;
 
-  @OneToMany('RefreshToken', 'user')
+  @OneToMany(() => RefreshToken, (token) => token.user)
   refreshTokens: RefreshToken[];
 }
