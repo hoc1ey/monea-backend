@@ -4,8 +4,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './config/env.schema.js';
 import { typeOrmAsyncConfig } from './config/typeorm.config.js';
 import { RedisModule } from './config/redis.module.js';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
+import { HealthModule } from './health/health.module.js';
 
 @Module({
   imports: [
@@ -15,8 +14,9 @@ import { AppService } from './app.service.js';
     }),
     TypeOrmModule.forRootAsync(typeOrmAsyncConfig),
     RedisModule,
+    HealthModule,
   ],
-  controllers: [AppController],
-  providers: [AppService],
+  controllers: [],
+  providers: [],
 })
 export class AppModule {}
