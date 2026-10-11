@@ -14,6 +14,9 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('PORT', 3000);
 
+  // Trust proxy para obtener la IP real del cliente detrás de un reverse proxy
+  app.getHttpAdapter().getInstance().set('trust proxy', true);
+
   // Helmet para seguridad en encabezados HTTP
   app.use(helmet());
 

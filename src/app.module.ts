@@ -1,10 +1,19 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
 import { validateEnv } from './config/env.schema.js';
 import { typeOrmAsyncConfig } from './config/typeorm.config.js';
 import { RedisModule } from './config/redis.module.js';
+import { APP_GUARD } from '@nestjs/core';
 import { HealthModule } from './health/health.module.js';
+import { UsersModule } from './users/users.module.js';
+import { AuthModule } from './auth/auth.module.js';
+import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
+import { RateLimitGuard } from './common/guards/rate-limit.guard.js';
+import { Redis } from 'ioredis';
+import { REDIS_CLIENT } from './config/redis.module.js';
 
 @Module({
   imports: [
@@ -14,9 +23,54 @@ import { HealthModule } from './health/health.module.js';
     }),
     TypeOrmModule.forRootAsync(typeOrmAsyncConfig),
     RedisModule,
+    ThrottlerModule.forRootAsync({
+      inject: [ConfigService, REDIS_CLIENT],
+      useFactory: (configService: ConfigService, redisClient: Redis) => ({
+        throttlers: [
+          {
+            name: 'strict',
+            limit: configService.get<number>('RATE_LIMIT_STRICT_LIMIT', 10),
+            ttl: configService.get<number>('RATE_LIMIT_STRICT_TTL_SECONDS', 60) * 1000,
+            blockDuration:
+              configService.get<number>('RATE_LIMIT_STRICT_BLOCK_SECONDS', 60) * 1000,
+            skipIf: (context) => {
+              // El throttler 'strict' se aplica a rutas públicas.
+              // Se salta en rutas autenticadas (donde el usuario está en req).
+              const req = context.switchToHttp().getRequest<{ user?: { id: string } }>();
+              return !!req.user?.id;
+            },
+          },
+          {
+            name: 'relaxed',
+            limit: configService.get<number>('RATE_LIMIT_RELAXED_LIMIT', 100),
+            ttl: configService.get<number>('RATE_LIMIT_RELAXED_TTL_SECONDS', 60) * 1000,
+            blockDuration:
+              configService.get<number>('RATE_LIMIT_RELAXED_BLOCK_SECONDS', 60) * 1000,
+            skipIf: (context) => {
+              // El throttler 'relaxed' se aplica a rutas autenticadas.
+              // Se salta en rutas públicas (donde el usuario no está en req).
+              const req = context.switchToHttp().getRequest<{ user?: { id: string } }>();
+              return !req.user?.id;
+            },
+          },
+        ],
+        storage: new ThrottlerStorageRedisService(redisClient),
+      }),
+    }),
     HealthModule,
+    UsersModule,
+    AuthModule,
   ],
   controllers: [],
-  providers: [],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: RateLimitGuard,
+    },
+  ],
 })
 export class AppModule {}
