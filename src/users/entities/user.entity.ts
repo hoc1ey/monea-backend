@@ -1,4 +1,4 @@
-import { Entity, Column, Index, OneToMany } from 'typeorm';
+import { Entity, Column, Index, OneToMany, type Relation } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity.js';
 import { RefreshToken } from '../../auth/entities/refresh-token.entity.js';
 
@@ -27,5 +27,5 @@ export class User extends BaseEntity {
   lastLoginAt: Date | null;
 
   @OneToMany(() => RefreshToken, (token) => token.user)
-  refreshTokens: RefreshToken[];
+  refreshTokens: Relation<RefreshToken[]>;
 }

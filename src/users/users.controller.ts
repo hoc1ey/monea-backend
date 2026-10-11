@@ -1,6 +1,7 @@
 import { Controller, Get, Patch, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse as SwaggerApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { UsersService } from './users.service.js';
+import { AuthService } from '../auth/auth.service.js';
 import { UpdateProfileDto } from './dto/update-profile.dto.js';
 import { ChangePasswordDto } from './dto/change-password.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
@@ -9,7 +10,10 @@ import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 @ApiBearerAuth()
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(
+    private readonly usersService: UsersService,
+    private readonly authService: AuthService,
+  ) {}
 
   @Get('me')
   @ApiOperation({ summary: 'Obtener perfil del usuario autenticado' })
@@ -43,7 +47,9 @@ export class UsersController {
     @CurrentUser('id') userId: string,
     @Body() dto: ChangePasswordDto,
   ) {
-    await this.usersService.changePassword(userId, dto);
+    await this.usersService.changePassword(userId, dto, (uid) =>
+      this.authService.logoutAll(uid).then(() => undefined),
+    );
     return {
       data: null,
       message: 'Contraseña actualizada correctamente',
