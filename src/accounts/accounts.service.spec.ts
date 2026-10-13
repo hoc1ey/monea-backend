@@ -227,10 +227,11 @@ describe('AccountsService', () => {
 
       vi.mocked(mockAccountRepo.findOne!).mockResolvedValue(mockAccount);
 
-      // Simular que existen las tablas
+      // Simular que existen las tablas y devuelven totales
       vi.mocked(mockAccountRepo.query!)
         .mockResolvedValueOnce([{ incomes: 'incomes', expenses: 'expenses' }])
-        .mockResolvedValueOnce([{ total_incomes: '500.50', total_expenses: '200.25' }]);
+        .mockResolvedValueOnce([{ total: '500.50' }])
+        .mockResolvedValueOnce([{ total: '200.25' }]);
 
       const balance = await service.getBalance('acc-1', 'user-1');
 
