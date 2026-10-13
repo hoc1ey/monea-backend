@@ -13,6 +13,7 @@ import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { IncomesModule } from './incomes/incomes.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RateLimitGuard } from './common/guards/rate-limit.guard.js';
 import { Redis } from 'ioredis';
@@ -66,6 +67,7 @@ import { REDIS_CLIENT } from './config/redis.module.js';
     AuthModule,
     AccountsModule,
     NotificationsModule,
+    IncomesModule,
   ],
   controllers: [],
   providers: [
