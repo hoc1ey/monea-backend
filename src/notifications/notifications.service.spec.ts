@@ -4,12 +4,12 @@ import { NotFoundException } from '@nestjs/common';
 import type { Repository } from 'typeorm';
 import { DeviceToken } from './entities/device-token.entity.js';
 import { DevicePlatform } from './notifications.constants.js';
-import admin from 'firebase-admin';
+import type { App } from 'firebase-admin/app';
 
 describe('NotificationsService', () => {
   let service: NotificationsService;
   let mockDeviceRepo: Partial<Repository<DeviceToken>>;
-  let mockFirebaseApp: Partial<admin.app.App>;
+  let mockFirebaseApp: Partial<App>;
 
   beforeEach(() => {
     mockDeviceRepo = {
@@ -24,7 +24,7 @@ describe('NotificationsService', () => {
 
     service = new NotificationsService(
       mockDeviceRepo as Repository<DeviceToken>,
-      mockFirebaseApp as admin.app.App,
+      mockFirebaseApp as App,
     );
   });
 

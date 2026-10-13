@@ -1,19 +1,20 @@
 import { Provider } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import admin from 'firebase-admin';
+import { initializeApp, cert, getApps, getApp, type App } from 'firebase-admin/app';
 import { FIREBASE_APP } from './notifications.constants.js';
 
 export const firebaseProvider: Provider = {
   provide: FIREBASE_APP,
   inject: [ConfigService],
-  useFactory: (configService: ConfigService) => {
-    if (admin.apps.length > 0) {
-      return admin.app();
+  useFactory: (configService: ConfigService): App => {
+    const apps = getApps();
+    if (apps.length > 0) {
+      return getApp();
     }
 
     const base64 = configService.get<string>('FIREBASE_SERVICE_ACCOUNT_BASE64');
     if (!base64) {
-      return admin.initializeApp({ projectId: 'moneo-dev' }, 'moneo-dev');
+      return initializeApp({ projectId: 'moneo-dev' }, 'moneo-dev');
     }
 
     try {
@@ -25,12 +26,12 @@ export const firebaseProvider: Provider = {
         serviceAccount.private_key &&
         serviceAccount.client_email
       ) {
-        return admin.initializeApp({
-          credential: admin.credential.cert(serviceAccount),
+        return initializeApp({
+          credential: cert(serviceAccount),
         });
       }
 
-      return admin.initializeApp(
+      return initializeApp(
         { projectId: serviceAccount.project_id || 'moneo-dev' },
         'moneo-dev',
       );
@@ -39,7 +40,7 @@ export const firebaseProvider: Provider = {
         'Advertencia: No se pudo inicializar Firebase con las credenciales proporcionadas. Se inicializa en modo desarrollo:',
         error,
       );
-      return admin.initializeApp({ projectId: 'moneo-dev' }, 'moneo-dev');
+      return initializeApp({ projectId: 'moneo-dev' }, 'moneo-dev');
     }
   },
 };

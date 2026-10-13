@@ -6,7 +6,13 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In } from 'typeorm';
-import admin from 'firebase-admin';
+import type { App } from 'firebase-admin/app';
+import {
+  getMessaging,
+  type MulticastMessage,
+  type BatchResponse,
+  type SendResponse,
+} from 'firebase-admin/messaging';
 import { DeviceToken } from './entities/device-token.entity.js';
 import {
   FIREBASE_APP,
@@ -27,7 +33,7 @@ export class NotificationsService {
     @InjectRepository(DeviceToken)
     private readonly deviceTokenRepository: Repository<DeviceToken>,
     @Inject(FIREBASE_APP)
-    private readonly firebaseApp: admin.app.App,
+    private readonly firebaseApp: App,
   ) {}
 
   /**
@@ -98,7 +104,7 @@ export class NotificationsService {
 
     const tokens = activeDevices.map((d) => d.token);
 
-    const message: admin.messaging.MulticastMessage = {
+    const message: MulticastMessage = {
       tokens,
       notification: {
         title: payload.title,
@@ -108,13 +114,13 @@ export class NotificationsService {
     };
 
     try {
-      const response = await admin
-        .messaging(this.firebaseApp)
-        .sendEachForMulticast(message);
+      const messaging = getMessaging(this.firebaseApp);
+      const response: BatchResponse =
+        await messaging.sendEachForMulticast(message);
 
       const tokensToDeactivate: string[] = [];
 
-      response.responses.forEach((res, index) => {
+      response.responses.forEach((res: SendResponse, index: number) => {
         if (!res.success && res.error) {
           const errorCode = res.error.code;
           if (
