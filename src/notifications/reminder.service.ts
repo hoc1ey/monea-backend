@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, MoreThan } from 'typeorm';
 import { Reminder } from './entities/reminder.entity.js';
@@ -7,13 +7,17 @@ import {
   ReminderStatus,
 } from './notifications.constants.js';
 import { ScheduleReminderInput } from './dto/schedule-reminder.dto.js';
+import { NotificationsService } from './notifications.service.js';
 import { DateUtil } from '../common/utils/date.util.js';
 
 @Injectable()
 export class ReminderService {
+  private readonly logger = new Logger(ReminderService.name);
+
   constructor(
     @InjectRepository(Reminder)
     protected readonly reminderRepository: Repository<Reminder>,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   /**
@@ -105,5 +109,67 @@ export class ReminderService {
         scheduledAt: 'ASC',
       },
     });
+  }
+
+  /**
+   * Despacha recordatorios pendientes cuya fecha scheduledAt sea menor o igual a la actual.
+   * Procesa en lotes de 100 usando FOR UPDATE SKIP LOCKED.
+   * Envía push notification y marca SENT. Si falla, incrementa attempts y tras 3 intentos marca FAILED.
+   */
+  async dispatchDue(): Promise<number> {
+    const queryRunner =
+      this.reminderRepository.manager.connection.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const dueReminders = await queryRunner.manager
+        .createQueryBuilder(Reminder, 'reminder')
+        .setLock('pessimistic_write')
+        .setOnLocked('skip_locked')
+        .where('reminder.status = :status', { status: ReminderStatus.PENDING })
+        .andWhere('reminder.scheduledAt <= :now', { now: new Date() })
+        .andWhere('reminder.isDeleted = false')
+        .orderBy('reminder.scheduledAt', 'ASC')
+        .limit(100)
+        .getMany();
+
+      for (const reminder of dueReminders) {
+        try {
+          await this.notificationsService.sendToUser(reminder.userId, {
+            title: reminder.title,
+            body: reminder.body,
+            data: {
+              reminderId: reminder.id,
+              type: reminder.type,
+              sourceId: reminder.sourceId,
+            },
+          });
+
+          reminder.attempts += 1;
+          reminder.status = ReminderStatus.SENT;
+          reminder.sentAt = new Date();
+          reminder.lastError = null;
+          await queryRunner.manager.save(reminder);
+        } catch (error) {
+          reminder.attempts += 1;
+          reminder.lastError =
+            (error as Error).message || 'Error desconocido al enviar notificación';
+          if (reminder.attempts >= 3) {
+            reminder.status = ReminderStatus.FAILED;
+          }
+          await queryRunner.manager.save(reminder);
+        }
+      }
+
+      await queryRunner.commitTransaction();
+      return dueReminders.length;
+    } catch (err) {
+      await queryRunner.rollbackTransaction();
+      this.logger.error('Error despachando recordatorios pendientes:', err);
+      throw err;
+    } finally {
+      await queryRunner.release();
+    }
   }
 }

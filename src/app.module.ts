@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import { ScheduleModule } from '@nestjs/schedule';
 import { validateEnv } from './config/env.schema.js';
 import { typeOrmAsyncConfig } from './config/typeorm.config.js';
 import { RedisModule } from './config/redis.module.js';
@@ -23,6 +24,7 @@ import { REDIS_CLIENT } from './config/redis.module.js';
       isGlobal: true,
       validate: validateEnv,
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync(typeOrmAsyncConfig),
     RedisModule,
     ThrottlerModule.forRootAsync({
