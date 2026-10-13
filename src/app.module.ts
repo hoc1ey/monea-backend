@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { ThrottlerStorageRedisService } from '@nest-lab/throttler-storage-redis';
+import { ScheduleModule } from '@nestjs/schedule';
 import { validateEnv } from './config/env.schema.js';
 import { typeOrmAsyncConfig } from './config/typeorm.config.js';
 import { RedisModule } from './config/redis.module.js';
@@ -11,6 +12,7 @@ import { HealthModule } from './health/health.module.js';
 import { UsersModule } from './users/users.module.js';
 import { AuthModule } from './auth/auth.module.js';
 import { AccountsModule } from './accounts/accounts.module.js';
+import { NotificationsModule } from './notifications/notifications.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RateLimitGuard } from './common/guards/rate-limit.guard.js';
 import { Redis } from 'ioredis';
@@ -22,6 +24,7 @@ import { REDIS_CLIENT } from './config/redis.module.js';
       isGlobal: true,
       validate: validateEnv,
     }),
+    ScheduleModule.forRoot(),
     TypeOrmModule.forRootAsync(typeOrmAsyncConfig),
     RedisModule,
     ThrottlerModule.forRootAsync({
@@ -62,6 +65,7 @@ import { REDIS_CLIENT } from './config/redis.module.js';
     UsersModule,
     AuthModule,
     AccountsModule,
+    NotificationsModule,
   ],
   controllers: [],
   providers: [
