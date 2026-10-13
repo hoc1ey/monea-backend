@@ -18,22 +18,27 @@ export class AccountsService {
     protected readonly accountRepository: Repository<Account>,
   ) {}
 
+  private tablesExistCache: { incomes: boolean; expenses: boolean } | null = null;
+
   /**
    * Verifica de forma segura si las tablas 'incomes' y 'expenses' existen en la base de datos.
-   * Permite que F02 funcione independientemente y se integre automáticamente cuando se implementen F04/F06.
+   * Permite que F04 funcione inmediatamente sumando ingresos antes de que se cree la tabla expenses (F06).
    */
-  private async checkMovementsTablesExist(): Promise<boolean> {
-    if (this.movementsTablesExist !== null) {
-      return this.movementsTablesExist;
+  private async checkMovementsTablesExist(): Promise<{ incomes: boolean; expenses: boolean }> {
+    if (this.tablesExistCache !== null && this.tablesExistCache.incomes && this.tablesExistCache.expenses) {
+      return this.tablesExistCache;
     }
     try {
       const result = (await this.accountRepository.query(
         `SELECT to_regclass('public.incomes') AS incomes, to_regclass('public.expenses') AS expenses`,
       )) as Array<{ incomes: string | null; expenses: string | null }>;
-      this.movementsTablesExist = !!(result[0]?.incomes && result[0]?.expenses);
-      return this.movementsTablesExist;
+      this.tablesExistCache = {
+        incomes: !!result[0]?.incomes,
+        expenses: !!result[0]?.expenses,
+      };
+      return this.tablesExistCache;
     } catch {
-      return false;
+      return { incomes: false, expenses: false };
     }
   }
 
@@ -43,30 +48,27 @@ export class AccountsService {
    * Los egresos diferidos no descuentan de la cuenta hasta que se paga la tarjeta (F07).
    */
   private async calculateAccountBalance(account: Account): Promise<number> {
-    const hasTables = await this.checkMovementsTablesExist();
-    if (!hasTables) {
-      return MoneyUtil.round(account.initialBalance);
+    const { incomes: hasIncomes, expenses: hasExpenses } =
+      await this.checkMovementsTablesExist();
+
+    let totalIncomes = 0;
+    let totalExpenses = 0;
+
+    if (hasIncomes) {
+      const incResult = (await this.accountRepository.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total FROM incomes WHERE "accountId" = $1 AND "isDeleted" = false`,
+        [account.id],
+      )) as Array<{ total: string | number }>;
+      totalIncomes = Number(incResult[0]?.total ?? 0);
     }
 
-    const rawResult = (await this.accountRepository.query(
-      `
-      SELECT 
-        COALESCE((
-          SELECT SUM(amount) 
-          FROM incomes 
-          WHERE "accountId" = $1 AND "isDeleted" = false
-        ), 0) AS total_incomes,
-        COALESCE((
-          SELECT SUM(amount) 
-          FROM expenses 
-          WHERE "accountId" = $1 AND "paymentMethod" = 'CORRIENTE' AND "isDeleted" = false
-        ), 0) AS total_expenses
-      `,
-      [account.id],
-    )) as Array<{ total_incomes: string | number; total_expenses: string | number }>;
-
-    const totalIncomes = Number(rawResult[0]?.total_incomes ?? 0);
-    const totalExpenses = Number(rawResult[0]?.total_expenses ?? 0);
+    if (hasExpenses) {
+      const expResult = (await this.accountRepository.query(
+        `SELECT COALESCE(SUM(amount), 0) AS total FROM expenses WHERE "accountId" = $1 AND "paymentMethod" = 'CORRIENTE' AND "isDeleted" = false`,
+        [account.id],
+      )) as Array<{ total: string | number }>;
+      totalExpenses = Number(expResult[0]?.total ?? 0);
+    }
 
     return MoneyUtil.round(
       MoneyUtil.subtract(
@@ -129,23 +131,26 @@ export class AccountsService {
    * Lista todas las cuentas activas del usuario con currentBalance calculado en 1 query agregada (sin N+1).
    */
   async findAll(userId: string) {
-    const hasTables = await this.checkMovementsTablesExist();
+    const { incomes: hasIncomes, expenses: hasExpenses } =
+      await this.checkMovementsTablesExist();
 
     let accountsWithBalance: Array<Account & { currentBalance: number }>;
 
-    if (hasTables) {
+    if (hasIncomes || hasExpenses) {
+      const incomeSubquery = hasIncomes
+        ? `COALESCE((SELECT SUM(inc.amount) FROM incomes inc WHERE inc."accountId" = account.id AND inc."isDeleted" = false), 0)`
+        : `0`;
+      const expenseSubquery = hasExpenses
+        ? `COALESCE((SELECT SUM(exp.amount) FROM expenses exp WHERE exp."accountId" = account.id AND exp."paymentMethod" = 'CORRIENTE' AND exp."isDeleted" = false), 0)`
+        : `0`;
+
       const qb = this.accountRepository
         .createQueryBuilder('account')
         .where('account.userId = :userId', { userId })
         .andWhere('account.isDeleted = false')
         .orderBy('account.createdAt', 'DESC')
         .addSelect(
-          `ROUND(
-            account."initialBalance"
-            + COALESCE((SELECT SUM(inc.amount) FROM incomes inc WHERE inc."accountId" = account.id AND inc."isDeleted" = false), 0)
-            - COALESCE((SELECT SUM(exp.amount) FROM expenses exp WHERE exp."accountId" = account.id AND exp."paymentMethod" = 'CORRIENTE' AND exp."isDeleted" = false), 0),
-            2
-          )`,
+          `ROUND(account."initialBalance" + ${incomeSubquery} - ${expenseSubquery}, 2)`,
           'calculated_balance',
         );
 
