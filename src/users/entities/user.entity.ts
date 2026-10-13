@@ -1,6 +1,7 @@
 import { Entity, Column, Index, OneToMany, type Relation } from 'typeorm';
 import { BaseEntity } from '../../common/entities/base.entity.js';
 import { RefreshToken } from '../../auth/entities/refresh-token.entity.js';
+import { Account } from '../../accounts/entities/account.entity.js';
 
 @Entity('users')
 @Index('UQ_users_email_isDeleted', ['email'], { unique: true, where: '"isDeleted" = false' })
@@ -28,4 +29,7 @@ export class User extends BaseEntity {
 
   @OneToMany(() => RefreshToken, (token) => token.user)
   refreshTokens: Relation<RefreshToken[]>;
+
+  @OneToMany(() => Account, (account) => account.user)
+  accounts: Relation<Account[]>;
 }
