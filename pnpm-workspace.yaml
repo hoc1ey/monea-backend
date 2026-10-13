@@ -1,3 +1,5 @@
 allowBuilds:
+  '@firebase/util': true
   '@scarf/scarf': false
   argon2: true
+  protobufjs: true
