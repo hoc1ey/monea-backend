@@ -134,7 +134,7 @@ export class NotificationsService {
 
       if (tokensToDeactivate.length > 0) {
         await this.deviceTokenRepository.update(
-          { token: In(tokensToDeactivate) },
+          { token: In(tokensToDeactivate), isDeleted: false },
           { isActive: false },
         );
       }

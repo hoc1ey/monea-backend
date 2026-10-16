@@ -1,124 +1,101 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# Monea Backend
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+API REST de finanzas personales construida con **NestJS 12**, **TypeORM** y
+**PostgreSQL** (ESM). Incluye autenticación JWT, cuentas, ingresos, egresos,
+tarjetas de crédito, egresos recurrentes, cobros, préstamos, deudas y listas de
+compras.
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Requisitos
 
-## Description
+- Node.js 20+
+- pnpm
+- PostgreSQL
+- Redis (rate limiting, sesiones y locks de schedulers)
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
-
-## Project setup
+## Instalación
 
 ```bash
-$ pnpm install
+pnpm install
 ```
 
-## Compile and run the project
+## Configuración
+
+Copia `.env.example` a `.env` y completa los valores. Las variables se validan
+con **Zod** al arrancar (`src/config/env.schema.ts`): si falta una o tiene
+formato inválido, la aplicación **no arranca**.
 
 ```bash
-# development
-$ pnpm run start
-
-# watch mode
-$ pnpm run start:dev
-
-# production mode
-$ pnpm run start:prod
+cp .env.example .env
 ```
 
-## Run tests
+### Variables de entorno
+
+| Variable | Obligatoria | Descripción |
+|---|---|---|
+| `NODE_ENV` | No | `development` \| `production` \| `test` (default `development`) |
+| `PORT` | No | Puerto HTTP (default `3000`) |
+| `DATABASE_URL` | Sí | URL de PostgreSQL (`postgres://` o `postgresql://`) |
+| `DB_SYNCHRONIZE` | Sí | `true` para que TypeORM sincronice el esquema (solo desarrollo) |
+| `REDIS_URL` | Sí | URL de Redis (`redis://` o `rediss://`) |
+| `JWT_ACCESS_SECRET` | Sí | Secreto del access token (mínimo 32 caracteres) |
+| `JWT_REFRESH_SECRET` | Sí | Secreto del refresh token (mínimo 32 caracteres) |
+| `JWT_ACCESS_EXPIRES_SECONDS` | Sí | Vida del access token en segundos (ej. `900`) |
+| `JWT_REFRESH_EXPIRES_DAYS` | Sí | Vida del refresh token en días (ej. `30`) |
+| `RATE_LIMIT_ENABLED` | Sí | Activa/desactiva el rate limiting |
+| `RATE_LIMIT_STRICT_LIMIT` | Sí | Límite de peticiones en rutas públicas |
+| `RATE_LIMIT_STRICT_TTL_SECONDS` | Sí | Ventana (segundos) del límite estricto |
+| `RATE_LIMIT_STRICT_BLOCK_SECONDS` | Sí | Duración del bloqueo estricto |
+| `RATE_LIMIT_RELAXED_LIMIT` | Sí | Límite de peticiones en rutas autenticadas |
+| `RATE_LIMIT_RELAXED_TTL_SECONDS` | Sí | Ventana (segundos) del límite relajado |
+| `RATE_LIMIT_RELAXED_BLOCK_SECONDS` | Sí | Duración del bloqueo relajado |
+| `ACCOUNT_LOCK_5_MINUTES` | Sí | Bloqueo de cuenta a los 5–6 intentos fallidos |
+| `ACCOUNT_LOCK_7_MINUTES` | Sí | Bloqueo de cuenta a los 7 intentos fallidos |
+| `ACCOUNT_LOCK_8_MINUTES` | Sí | Bloqueo de cuenta a los 8 intentos fallidos |
+| `ACCOUNT_LOCK_9_PLUS_MINUTES` | Sí | Bloqueo de cuenta a los 9+ intentos fallidos |
+| `IP_LOCK_WINDOW_MINUTES` | Sí | Ventana para contar fallos por IP |
+| `IP_LOCK_MINUTES` | Sí | Duración del bloqueo por IP |
+| `FIREBASE_SERVICE_ACCOUNT_BASE64` | Sí | Service account de FCM en Base64 (puede ser `e30=` en local) |
+| `DEFAULT_TIMEZONE` | Sí | Zona horaria IANA por defecto (ej. `America/Bogota`) |
+| `SCHEDULER_ENABLED` | Sí | Habilita los schedulers de recordatorios y recurrencias |
+
+## Comandos
 
 ```bash
-# unit tests
-$ pnpm run test
+# desarrollo (watch)
+pnpm run start:dev
 
-# e2e tests
-$ pnpm run test:e2e
+# producción
+pnpm run build && pnpm run start:prod
 
-# test coverage
-$ pnpm run test:cov
+# pruebas unitarias (vitest)
+pnpm run test
+
+# pruebas e2e (requieren Postgres + Redis reales y .env válido)
+pnpm run test:e2e
+
+# cobertura
+pnpm run test:cov
+
+# lint (oxlint, type-aware)
+pnpm run lint
 ```
 
-## Deployment
+## Documentación de la API
 
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
+Con el servidor corriendo, Swagger está disponible en
+`http://localhost:PORT/api/docs`. Todas las rutas están documentadas y las
+públicas se marcan con `@IsPublic()`. El prefijo global es `api/v1`, salvo
+`/health`.
 
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
+## Notas de arquitectura
 
-```bash
-$ pnpm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Observability
-
-In production applications, observability is essential for understanding how your system behaves, detecting issues early, and maintaining reliable performance.
-
-[NestJS Observe](https://observe.nestjs.com) automatically instruments your NestJS application, giving you deep visibility into your system with minimal setup:
-
-- **Distributed tracing:** Follow requests across services and understand how they flow through your system.
-- **Waterfall analysis:** Visualize request execution and identify slow operations, bottlenecks, and unexpected delays.
-- **Performance analysis:** Analyze application performance in real time and quickly pinpoint areas that need optimization.
-- **Metrics:** Track key application and infrastructure metrics to understand system health and performance trends.
-- **Logging:** Centralize and correlate logs with traces and other telemetry to make debugging easier.
-- **Error tracking:** Detect errors quickly and investigate their root causes with the surrounding context.
-- **SLA monitoring:** Track service-level objectives and identify when your application is approaching or exceeding defined thresholds.
-- **Alarms and alerts:** Set up alerts for critical errors, performance degradation, SLA violations, and other anomalies so your team can react quickly.
-
-To add it to this project:
-
-```bash
-$ pnpm install @nestjs/observe
-```
-
-Then follow the [setup guide](https://docs.nestjs.com/observability/overview) - it takes a single import and an app key.
-
-The free plan needs no payment details and covers 300,000 events a month. You can also browse the [live demo](https://www.observe-demo.nestjs.com/dashboard) first - the whole dashboard over a busy service's data, with nothing to install.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Auto-instrument your application with [NestJS Observe](https://observe.nestjs.com). Distributed tracing, metrics, and logging made easy. Error tracking and performance monitoring for your NestJS applications.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+- Las respuestas usan un contrato uniforme
+  `{ success, statusCode, data, message, errors }` (interceptor + filtro
+  globales).
+- No hay migraciones: TypeORM usa `autoLoadEntities` + `synchronize` con
+  `DB_SYNCHRONIZE`.
+- Nada se borra físicamente: todas las entidades extienden `BaseEntity`
+  (`isDeleted`, `deletedAt`) y las consultas filtran `isDeleted: false`.
+- Las fechas se almacenan en UTC (`timestamptz`) y se convierten con el
+  `timezone` del usuario para recordatorios y recurrencias.
+- Los montos usan `numeric(14,2)` y cálculos con `decimal.js`.

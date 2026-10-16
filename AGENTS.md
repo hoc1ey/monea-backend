@@ -37,6 +37,8 @@ Feature specs live in `docs/features/FEATURE_N.md`; global rules in
 - TypeORM relations must stay inside `() => Entity` callbacks; entities reference each other in cycles and eager class references would break at module load.
 - Recurring idempotency: `Expense.occurrenceDate` (nullable `date`) + unique index `(recurringConfigId, occurrenceDate)`. `RecurringExpensesService.generateDueExpenses` creates expenses via `ExpensesService.createInternal` (`sourceType=RECURRING`, `paymentMethod=CORRIENTE`; variables get `amount=0, amountPending=true`). Keep the `occurrenceDate` plumbing when touching expenses.
 - `pnpm run test` includes only `**/*.spec.ts`; e2e files are `test/*.e2e-spec.ts` and are excluded from the unit run.
+- F13 tests: unit specs are colocated (`src/**/*.spec.ts`). `test/env.e2e-spec.ts` stubs an invalid `DATABASE_URL` and asserts `AppModule` fails to boot, so it runs with no Postgres/Redis; the auth-flow/rate-limit e2e in `test/auth.e2e-spec.ts` boot the full `AppModule` and need real services.
+- F13 soft-delete audit (keep it clean): every TypeORM query filters `isDeleted: false`, EXCEPT two intentional cases that must NOT be "fixed": `NotificationsService.registerDevice` looks up the device token without the filter to resurrect soft-deleted devices (then sets `isDeleted=false`), and the recurring-expense idempotency probe (`Expense` by `recurringConfigId` + `occurrenceDate`) omits it because the unique index is not partial — filtering would cause a constraint violation.
 - PowerShell: do not rewrite `src` files with `Set-Content`/`Out-File`; they re-encode UTF-8 as ANSI and corrupt Spanish accents. Use the file-editing tools.
 
 ## Git / feature flow
