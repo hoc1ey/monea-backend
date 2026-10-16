@@ -5,6 +5,7 @@ import { Account } from '../../accounts/entities/account.entity.js';
 import { DeviceToken } from '../../notifications/entities/device-token.entity.js';
 import { Reminder } from '../../notifications/entities/reminder.entity.js';
 import { Income } from '../../incomes/entities/income.entity.js';
+import { CreditCard } from '../../credit-cards/entities/credit-card.entity.js';
 
 @Entity('users')
 @Index('UQ_users_email_isDeleted', ['email'], { unique: true, where: '"isDeleted" = false' })
@@ -44,4 +45,7 @@ export class User extends BaseEntity {
 
   @OneToMany(() => Income, (income) => income.user)
   incomes: Relation<Income[]>;
+
+  @OneToMany(() => CreditCard, (card) => card.user)
+  creditCards: Relation<CreditCard[]>;
 }
