@@ -1,10 +1,21 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  ConflictException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
+import { randomUUID } from 'node:crypto';
 import { CreditCard } from './entities/credit-card.entity.js';
 import { CreditCardPayment } from './entities/credit-card-payment.entity.js';
+import { Expense } from '../expenses/entities/expense.entity.js';
 import { ExpenseInstallment } from '../expenses/entities/expense-installment.entity.js';
+import {
+  ExpensePaymentMethod,
+  ExpenseSourceType,
+} from '../expenses/expenses.constants.js';
 import { CreditCardsService } from './credit-cards.service.js';
+import { AccountsService } from '../accounts/accounts.service.js';
 import { UsersService } from '../users/users.service.js';
 import { MoneyUtil } from '../common/utils/money.util.js';
 import { DateUtil } from '../common/utils/date.util.js';
@@ -54,7 +65,9 @@ export class CreditCardBillingService {
     private readonly paymentRepository: Repository<CreditCardPayment>,
     @InjectRepository(ExpenseInstallment)
     private readonly installmentRepository: Repository<ExpenseInstallment>,
+    private readonly dataSource: DataSource,
     private readonly creditCardsService: CreditCardsService,
+    private readonly accountsService: AccountsService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -195,6 +208,96 @@ export class CreditCardBillingService {
         : null;
 
     return { currentDebt, upcoming, totalPending, creditLimit, availableCredit };
+  }
+
+  /**
+   * Marca un periodo como pagado: crea un egreso CORRIENTE (origen CARD_PAYMENT),
+   * registra el pago y marca las cuotas del periodo. Todo dentro de una
+   * transacción. Luego reprograma el recordatorio de pago de la tarjeta.
+   */
+  async markPeriodAsPaid(
+    userId: string,
+    cardId: string,
+    options: { accountId: string; period?: string },
+  ): Promise<CreditCardPayment> {
+    const card = await this.creditCardsService.assertOwnership(userId, cardId);
+    await this.accountsService.assertOwnership(userId, options.accountId);
+
+    const user = await this.usersService.findById(userId);
+    const timezone = user.timezone || 'America/Bogota';
+    const currentPeriod = DateUtil.formatPeriodInTimezone(new Date(), timezone);
+    const period = options.period ?? currentPeriod;
+
+    if (period > currentPeriod) {
+      throw new BadRequestException('No se pueden pagar periodos futuros');
+    }
+
+    const existing = await this.paymentRepository.findOne({
+      where: { creditCardId: cardId, period, isDeleted: false },
+    });
+    if (existing) {
+      throw new ConflictException('El periodo ya fue pagado');
+    }
+
+    const installments = await this.getPeriodInstallments(cardId, period);
+    const total = this.sumAmounts(installments.map((i) => i.amount));
+
+    if (total <= 0) {
+      throw new BadRequestException('No hay deuda para el periodo indicado');
+    }
+
+    const paidAt = new Date();
+
+    const payment = await this.dataSource.transaction(async (manager) => {
+      const paymentId = randomUUID();
+
+      const expenseRepo = manager.getRepository(Expense);
+      const expense = expenseRepo.create({
+        userId,
+        accountId: options.accountId,
+        name: `Pago tarjeta ${card.name} (${period})`,
+        amount: total,
+        description: null,
+        date: paidAt,
+        paymentMethod: ExpensePaymentMethod.CORRIENTE,
+        creditCardId: null,
+        installments: null,
+        graceMonths: 0,
+        amountPending: false,
+        recurringConfigId: null,
+        sourceType: ExpenseSourceType.CARD_PAYMENT,
+        sourceId: paymentId,
+      });
+      const savedExpense = await expenseRepo.save(expense);
+
+      const paymentRepo = manager.getRepository(CreditCardPayment);
+      const savedPayment = await paymentRepo.save(
+        paymentRepo.create({
+          id: paymentId,
+          userId,
+          creditCardId: card.id,
+          accountId: options.accountId,
+          expenseId: savedExpense.id,
+          period,
+          amount: total,
+          paidAt,
+        }),
+      );
+
+      for (const installment of installments) {
+        installment.isPaid = true;
+        installment.cardPaymentId = paymentId;
+      }
+      if (installments.length > 0) {
+        await manager.getRepository(ExpenseInstallment).save(installments);
+      }
+
+      return savedPayment;
+    });
+
+    await this.creditCardsService.scheduleNextPaymentReminder(card);
+
+    return payment;
   }
 
   /**

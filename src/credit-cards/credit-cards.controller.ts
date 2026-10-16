@@ -25,6 +25,8 @@ import { UpdateCreditCardDto } from './dto/update-credit-card.dto.js';
 import { CreditCardResponseDto } from './dto/credit-card-response.dto.js';
 import { ReportQueryDto } from './dto/report-query.dto.js';
 import { ReportRangeQueryDto } from './dto/report-range-query.dto.js';
+import { PayCreditCardDto } from './dto/pay-credit-card.dto.js';
+import { CreditCardPaymentResponseDto } from './dto/credit-card-payment-response.dto.js';
 import {
   CreditCardMonthlyReportResponseDto,
   CreditCardRangeReportResponseDto,
@@ -194,5 +196,32 @@ export class CreditCardsController {
   ) {
     const data = await this.creditCardBillingService.getCurrentDebt(userId, id);
     return { data, message: 'Deuda obtenida correctamente' };
+  }
+
+  @Post(':id/pay')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({
+    summary: 'Marcar un periodo de la tarjeta como pagado generando un egreso',
+  })
+  @ApiParam({ name: 'id', description: 'ID de la tarjeta (UUID)' })
+  @SwaggerApiResponse({
+    status: 201,
+    description: 'Tarjeta pagada correctamente',
+    type: CreditCardPaymentResponseDto,
+  })
+  @SwaggerApiResponse({ status: 400, description: 'Periodo inválido o sin deuda' })
+  @SwaggerApiResponse({ status: 401, description: 'No autenticado' })
+  @SwaggerApiResponse({ status: 404, description: 'Tarjeta o cuenta no encontrada' })
+  @SwaggerApiResponse({ status: 409, description: 'El periodo ya fue pagado' })
+  async pay(
+    @CurrentUser('id') userId: string,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: PayCreditCardDto,
+  ) {
+    const data = await this.creditCardBillingService.markPeriodAsPaid(userId, id, {
+      accountId: dto.accountId,
+      period: dto.period,
+    });
+    return { data, message: 'Tarjeta pagada correctamente' };
   }
 }

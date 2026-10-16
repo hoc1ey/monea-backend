@@ -8,12 +8,14 @@ import { CreditCardBillingService } from './credit-card-billing.service.js';
 import { CreditCardsController } from './credit-cards.controller.js';
 import { NotificationsModule } from '../notifications/notifications.module.js';
 import { UsersModule } from '../users/users.module.js';
+import { AccountsModule } from '../accounts/accounts.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([CreditCard, CreditCardPayment, ExpenseInstallment]),
     NotificationsModule,
     UsersModule,
+    AccountsModule,
   ],
   controllers: [CreditCardsController],
   providers: [CreditCardsService, CreditCardBillingService],
