@@ -24,11 +24,14 @@ Feature specs live in `docs/features/FEATURE_N.md`; global rules in
 - Dates: stored UTC in `timestamptz`; convert for reminders/recurrences with `User.timezone` and `common/utils/date.util.ts`.
 - Env is Zod-validated at boot (`config/env.schema.ts`): a missing/invalid var prevents startup.
 - New modules are direct children of `src/` and must be registered in `app.module.ts`. Module/entity/DTO layout mirrors `incomes/` and `credit-cards/`.
+- Schedulers run only when `SCHEDULER_ENABLED=true` and take a Redis `SET ... NX EX` lock (keys `lock:reminders`, every minute; `lock:recurring-expenses`, every hour). Acceptance tests force work with SQL (e.g. `nextRunAt = now() - interval '1 minute'`) and wait for a cycle.
+- Recurrences go through `common/utils/recurrence.util.ts`. `RecurringExpenseConfig.nextRunAt` stores the UTC instant of the occurrence's local midnight (`User.timezone`). `create` derives it from `startDate`; `update`/reactivate recompute from today (no backfill).
 
 ## Gotchas
 - class-validator `@ValidateIf` conditions on the same property are combined with AND, so do not stack mutually exclusive conditions. Put the "required when X" rule in the DTO and enforce the "forbidden when not X" rule in the service.
 - `AccountsService.calculateAccountBalance` (and its `findAll` subqueries) use raw SQL plus `to_regclass` checks to tolerate tables that do not exist yet. It sums `incomes` and subtracts `expenses WHERE "paymentMethod" = 'CORRIENTE'`. When you add a new movement source, update both places.
 - TypeORM relations must stay inside `() => Entity` callbacks; entities reference each other in cycles and eager class references would break at module load.
+- Recurring idempotency: `Expense.occurrenceDate` (nullable `date`) + unique index `(recurringConfigId, occurrenceDate)`. `RecurringExpensesService.generateDueExpenses` creates expenses via `ExpensesService.createInternal` (`sourceType=RECURRING`, `paymentMethod=CORRIENTE`; variables get `amount=0, amountPending=true`). Keep the `occurrenceDate` plumbing when touching expenses.
 - `pnpm run test` includes only `**/*.spec.ts`; e2e files are `test/*.e2e-spec.ts` and are excluded from the unit run.
 - PowerShell: do not rewrite `src` files with `Set-Content`/`Out-File`; they re-encode UTF-8 as ANSI and corrupt Spanish accents. Use the file-editing tools.
 
