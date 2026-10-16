@@ -73,6 +73,13 @@ export class ExpenseResponseDto {
   @ApiPropertyOptional({ example: null, nullable: true })
   recurringConfigId: string | null;
 
+  @ApiPropertyOptional({
+    example: '2026-10-09',
+    nullable: true,
+    description: 'Fecha de la ocurrencia que originó el egreso recurrente',
+  })
+  occurrenceDate: string | null;
+
   @ApiProperty({
     enum: ExpenseSourceType,
     example: ExpenseSourceType.MANUAL,
