@@ -22,7 +22,11 @@ import { DebtsService } from './debts.service.js';
 import { CreateDebtDto } from './dto/create-debt.dto.js';
 import { UpdateDebtDto } from './dto/update-debt.dto.js';
 import { QueryDebtDto } from './dto/query-debt.dto.js';
-import { DebtResponseDto } from './dto/debt-response.dto.js';
+import { PayDebtInstallmentDto } from './dto/pay-installment.dto.js';
+import {
+  DebtResponseDto,
+  PayDebtInstallmentResponseDto,
+} from './dto/debt-response.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 
 @ApiTags('Debts')
@@ -114,5 +118,28 @@ export class DebtsController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
     return this.debtsService.remove(userId, id);
+  }
+
+  @Post(':id/installments/:installmentId/pay')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Pagar una cuota (crea un egreso en la cuenta indicada)' })
+  @ApiParam({ name: 'id', description: 'ID de la deuda (UUID)' })
+  @ApiParam({ name: 'installmentId', description: 'ID de la cuota (UUID)' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Cuota pagada correctamente',
+    type: PayDebtInstallmentResponseDto,
+  })
+  @SwaggerApiResponse({ status: 400, description: 'Datos de validación inválidos o cuota ya pagada' })
+  @SwaggerApiResponse({ status: 401, description: 'No autenticado' })
+  @SwaggerApiResponse({ status: 404, description: 'Deuda, cuota o cuenta no encontrada' })
+  async payInstallment(
+    @CurrentUser('id') userId: string,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Param('installmentId', new ParseUUIDPipe({ version: '4' }))
+    installmentId: string,
+    @Body() dto: PayDebtInstallmentDto,
+  ) {
+    return this.debtsService.payInstallment(userId, id, installmentId, dto);
   }
 }

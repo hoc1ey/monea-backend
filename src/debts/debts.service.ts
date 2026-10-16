@@ -4,12 +4,18 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, In } from 'typeorm';
+import {
+  Repository,
+  DataSource,
+  EntityManager,
+  In,
+} from 'typeorm';
 import { Debt } from './entities/debt.entity.js';
 import { DebtInstallment } from './entities/debt-installment.entity.js';
 import { CreateDebtDto } from './dto/create-debt.dto.js';
 import { UpdateDebtDto } from './dto/update-debt.dto.js';
 import { QueryDebtDto } from './dto/query-debt.dto.js';
+import { PayDebtInstallmentDto } from './dto/pay-installment.dto.js';
 import { DebtStatus } from './debts.constants.js';
 import {
   InstallmentReminderConfig,
@@ -20,6 +26,12 @@ import { MoneyUtil } from '../common/utils/money.util.js';
 import { ReminderService } from '../notifications/reminder.service.js';
 import { ReminderType } from '../notifications/notifications.constants.js';
 import { UsersService } from '../users/users.service.js';
+import { AccountsService } from '../accounts/accounts.service.js';
+import { ExpensesService } from '../expenses/expenses.service.js';
+import {
+  ExpensePaymentMethod,
+  ExpenseSourceType,
+} from '../expenses/expenses.constants.js';
 
 interface ReminderFields {
   reminderFrequency: RecurrenceFrequency | null;
@@ -37,8 +49,11 @@ export class DebtsService {
     protected readonly debtRepository: Repository<Debt>,
     @InjectRepository(DebtInstallment)
     protected readonly installmentRepository: Repository<DebtInstallment>,
+    private readonly dataSource: DataSource,
     private readonly reminderService: ReminderService,
     private readonly usersService: UsersService,
+    private readonly accountsService: AccountsService,
+    private readonly expensesService: ExpensesService,
   ) {}
 
   /**
@@ -296,6 +311,82 @@ export class DebtsService {
   }
 
   /**
+   * Paga una cuota: crea el egreso (`DEBT_PAYMENT`) en la cuenta indicada,
+   * marca la cuota, cancela su recordatorio y recalcula el estado.
+   * Todo el movimiento monetario ocurre en una transacción.
+   */
+  async payInstallment(
+    userId: string,
+    debtId: string,
+    installmentId: string,
+    dto: PayDebtInstallmentDto,
+  ) {
+    const debt = await this.assertOwnership(userId, debtId);
+
+    const installment = await this.installmentRepository.findOne({
+      where: { id: installmentId, debtId, userId, isDeleted: false },
+    });
+
+    if (!installment) {
+      throw new NotFoundException('Cuota no encontrada');
+    }
+
+    if (installment.isPaid) {
+      throw new BadRequestException('La cuota ya fue pagada');
+    }
+
+    await this.accountsService.assertOwnership(userId, dto.accountId);
+
+    const paidAt = new Date();
+
+    const status = await this.dataSource.transaction(async (manager) => {
+      const expense = await this.expensesService.createInternal(
+        userId,
+        {
+          accountId: dto.accountId,
+          name:
+            dto.name ??
+            `Deuda ${debt.personName} (${installment.number}/${debt.installmentsCount})`,
+          amount: installment.amount,
+          description: dto.description ?? null,
+          date: paidAt,
+          paymentMethod: ExpensePaymentMethod.CORRIENTE,
+          sourceType: ExpenseSourceType.DEBT_PAYMENT,
+          sourceId: installment.id,
+        },
+        manager,
+      );
+
+      installment.isPaid = true;
+      installment.paidAt = paidAt;
+      installment.expenseId = expense.id;
+      await manager.getRepository(DebtInstallment).save(installment);
+
+      const debtStatus = await this.recalculateStatus(debt.id, manager);
+      debt.status = debtStatus;
+      await manager.getRepository(Debt).save(debt);
+
+      return debtStatus;
+    });
+
+    await this.reminderService.cancelBySource(ReminderType.DEBT, installment.id);
+
+    return {
+      data: {
+        installment: {
+          number: installment.number,
+          amount: installment.amount,
+          isPaid: installment.isPaid,
+          paidAt: installment.paidAt,
+          expenseId: installment.expenseId,
+        },
+        debtStatus: status,
+      },
+      message: 'Cuota pagada correctamente',
+    };
+  }
+
+  /**
    * Valida que la deuda exista, no esté eliminada y pertenezca al usuario.
    */
   async assertOwnership(userId: string, id: string): Promise<Debt> {
@@ -308,6 +399,38 @@ export class DebtsService {
     }
 
     return debt;
+  }
+
+  /**
+   * Recalcula el estado de la deuda según sus cuotas activas.
+   */
+  private async recalculateStatus(
+    debtId: string,
+    manager?: EntityManager,
+  ): Promise<DebtStatus> {
+    const repo = manager
+      ? manager.getRepository(DebtInstallment)
+      : this.installmentRepository;
+
+    const installments = await repo.find({
+      where: { debtId, isDeleted: false },
+    });
+
+    if (installments.length === 0) {
+      return DebtStatus.PENDING;
+    }
+
+    const paidCount = installments.filter(
+      (installment) => installment.isPaid,
+    ).length;
+
+    if (paidCount === 0) {
+      return DebtStatus.PENDING;
+    }
+    if (paidCount === installments.length) {
+      return DebtStatus.PAID;
+    }
+    return DebtStatus.PARTIAL;
   }
 
   private async createInstallments(
