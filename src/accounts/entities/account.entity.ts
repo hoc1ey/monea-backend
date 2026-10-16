@@ -11,6 +11,7 @@ import { BaseEntity } from '../../common/entities/base.entity.js';
 import { User } from '../../users/entities/user.entity.js';
 import { decimalTransformer } from '../../common/transformers/decimal.transformer.js';
 import { Income } from '../../incomes/entities/income.entity.js';
+import { Expense } from '../../expenses/entities/expense.entity.js';
 
 @Entity('accounts')
 @Index(['userId', 'isDeleted'])
@@ -45,4 +46,7 @@ export class Account extends BaseEntity {
 
   @OneToMany(() => Income, (income) => income.account)
   incomes: Relation<Income[]>;
+
+  @OneToMany(() => Expense, (expense) => expense.account)
+  expenses: Relation<Expense[]>;
 }

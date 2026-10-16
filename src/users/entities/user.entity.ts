@@ -6,6 +6,8 @@ import { DeviceToken } from '../../notifications/entities/device-token.entity.js
 import { Reminder } from '../../notifications/entities/reminder.entity.js';
 import { Income } from '../../incomes/entities/income.entity.js';
 import { CreditCard } from '../../credit-cards/entities/credit-card.entity.js';
+import { Expense } from '../../expenses/entities/expense.entity.js';
+import { ExpenseInstallment } from '../../expenses/entities/expense-installment.entity.js';
 
 @Entity('users')
 @Index('UQ_users_email_isDeleted', ['email'], { unique: true, where: '"isDeleted" = false' })
@@ -48,4 +50,10 @@ export class User extends BaseEntity {
 
   @OneToMany(() => CreditCard, (card) => card.user)
   creditCards: Relation<CreditCard[]>;
+
+  @OneToMany(() => Expense, (expense) => expense.user)
+  expenses: Relation<Expense[]>;
+
+  @OneToMany(() => ExpenseInstallment, (installment) => installment.user)
+  expenseInstallments: Relation<ExpenseInstallment[]>;
 }
