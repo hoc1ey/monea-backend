@@ -100,5 +100,5 @@ export class Expense extends BaseEntity {
   sourceId: string | null;
 
   @OneToMany(() => ExpenseInstallment, (installment) => installment.expense)
-  expenseInstallments: Relation<ExpenseInstallment[]>;
+  installmentPlan: Relation<ExpenseInstallment[]>;
 }

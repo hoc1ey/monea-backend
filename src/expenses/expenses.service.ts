@@ -269,7 +269,7 @@ export class ExpensesService {
     }
 
     if (expense.paymentMethod === ExpensePaymentMethod.DIFERIDO) {
-      expense.expenseInstallments = await this.installmentRepository.find({
+      expense.installmentPlan = await this.installmentRepository.find({
         where: { expenseId: expense.id, userId, isDeleted: false },
         order: { number: 'ASC' },
       });
@@ -557,7 +557,7 @@ export class ExpensesService {
       card &&
       saved.installments != null
     ) {
-      saved.expenseInstallments = await this.persistInstallments(
+      saved.installmentPlan = await this.persistInstallments(
         manager,
         saved,
         card,

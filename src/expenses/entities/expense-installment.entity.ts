@@ -31,7 +31,7 @@ export class ExpenseInstallment extends BaseEntity {
   @Column({ type: 'uuid' })
   expenseId: string;
 
-  @ManyToOne(() => Expense, (expense) => expense.expenseInstallments, {
+  @ManyToOne(() => Expense, (expense) => expense.installmentPlan, {
     onDelete: 'CASCADE',
   })
   @JoinColumn({ name: 'expenseId' })

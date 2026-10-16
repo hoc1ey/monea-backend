@@ -84,9 +84,9 @@ export class ExpenseResponseDto {
 
   @ApiPropertyOptional({
     type: [ExpenseInstallmentResponseDto],
-    description: 'Cuotas del egreso (presente solo en egresos diferidos)',
+    description: 'Plan de cuotas del egreso (presente solo en egresos diferidos)',
   })
-  expenseInstallments?: ExpenseInstallmentResponseDto[];
+  installmentPlan?: ExpenseInstallmentResponseDto[];
 
   @ApiProperty({ example: false })
   isDeleted: boolean;
