@@ -5,6 +5,7 @@ import { CreditCard } from './entities/credit-card.entity.js';
 import { CreditCardPayment } from './entities/credit-card-payment.entity.js';
 import { ExpenseInstallment } from '../expenses/entities/expense-installment.entity.js';
 import { CreditCardsService } from './credit-cards.service.js';
+import { UsersService } from '../users/users.service.js';
 import { MoneyUtil } from '../common/utils/money.util.js';
 import { DateUtil } from '../common/utils/date.util.js';
 
@@ -36,6 +37,14 @@ export interface CreditCardRangeReport {
   grandTotal: number;
 }
 
+export interface CreditCardDebt {
+  currentDebt: number;
+  upcoming: number;
+  totalPending: number;
+  creditLimit: number | null;
+  availableCredit: number | null;
+}
+
 const MAX_RANGE_MONTHS = 24;
 
 @Injectable()
@@ -46,6 +55,7 @@ export class CreditCardBillingService {
     @InjectRepository(ExpenseInstallment)
     private readonly installmentRepository: Repository<ExpenseInstallment>,
     private readonly creditCardsService: CreditCardsService,
+    private readonly usersService: UsersService,
   ) {}
 
   /**
@@ -147,6 +157,44 @@ export class CreditCardBillingService {
     }
 
     return { months, grandTotal };
+  }
+
+  /**
+   * Deuda exigible hoy (cuotas no pagadas con periodo <= actual), deuda futura
+   * y cupo disponible.
+   */
+  async getCurrentDebt(userId: string, cardId: string): Promise<CreditCardDebt> {
+    const card = await this.creditCardsService.assertOwnership(userId, cardId);
+
+    const user = await this.usersService.findById(userId);
+    const currentPeriod = DateUtil.formatPeriodInTimezone(
+      new Date(),
+      user.timezone || 'America/Bogota',
+    );
+
+    const installments = await this.installmentRepository.find({
+      where: { creditCardId: cardId, isDeleted: false },
+    });
+
+    const currentDebt = this.sumAmounts(
+      installments
+        .filter((i) => !i.isPaid && i.period <= currentPeriod)
+        .map((i) => i.amount),
+    );
+    const upcoming = this.sumAmounts(
+      installments
+        .filter((i) => !i.isPaid && i.period > currentPeriod)
+        .map((i) => i.amount),
+    );
+    const totalPending = MoneyUtil.round(MoneyUtil.add(currentDebt, upcoming));
+
+    const creditLimit = card.creditLimit;
+    const availableCredit =
+      creditLimit != null
+        ? MoneyUtil.round(MoneyUtil.subtract(creditLimit, totalPending))
+        : null;
+
+    return { currentDebt, upcoming, totalPending, creditLimit, availableCredit };
   }
 
   /**

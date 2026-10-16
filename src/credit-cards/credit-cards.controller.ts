@@ -28,6 +28,7 @@ import { ReportRangeQueryDto } from './dto/report-range-query.dto.js';
 import {
   CreditCardMonthlyReportResponseDto,
   CreditCardRangeReportResponseDto,
+  CreditCardDebtResponseDto,
 } from './dto/credit-card-report-response.dto.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 
@@ -176,4 +177,22 @@ export class CreditCardsController {
     return { data, message: 'Reporte generado' };
   }
 
+  @Get(':id/debt')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Deuda actual y cupo disponible de la tarjeta' })
+  @ApiParam({ name: 'id', description: 'ID de la tarjeta (UUID)' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Deuda obtenida correctamente',
+    type: CreditCardDebtResponseDto,
+  })
+  @SwaggerApiResponse({ status: 401, description: 'No autenticado' })
+  @SwaggerApiResponse({ status: 404, description: 'Tarjeta no encontrada' })
+  async getDebt(
+    @CurrentUser('id') userId: string,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+  ) {
+    const data = await this.creditCardBillingService.getCurrentDebt(userId, id);
+    return { data, message: 'Deuda obtenida correctamente' };
+  }
 }

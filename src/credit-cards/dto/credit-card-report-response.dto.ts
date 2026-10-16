@@ -55,3 +55,20 @@ export class CreditCardRangeReportResponseDto {
   @ApiProperty({ example: 1060 })
   grandTotal: number;
 }
+
+export class CreditCardDebtResponseDto {
+  @ApiProperty({ example: 300 })
+  currentDebt: number;
+
+  @ApiProperty({ example: 760 })
+  upcoming: number;
+
+  @ApiProperty({ example: 1060 })
+  totalPending: number;
+
+  @ApiPropertyOptional({ example: 2000, nullable: true })
+  creditLimit: number | null;
+
+  @ApiPropertyOptional({ example: 940, nullable: true })
+  availableCredit: number | null;
+}
