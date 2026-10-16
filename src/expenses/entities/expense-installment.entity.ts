@@ -9,6 +9,7 @@ import {
 import { BaseEntity } from '../../common/entities/base.entity.js';
 import { User } from '../../users/entities/user.entity.js';
 import { CreditCard } from '../../credit-cards/entities/credit-card.entity.js';
+import { CreditCardPayment } from '../../credit-cards/entities/credit-card-payment.entity.js';
 import { decimalTransformer } from '../../common/transformers/decimal.transformer.js';
 import { Expense } from './expense.entity.js';
 
@@ -64,6 +65,14 @@ export class ExpenseInstallment extends BaseEntity {
   @Column({ type: 'boolean', default: false })
   isPaid: boolean;
 
+  @Index()
   @Column({ type: 'uuid', nullable: true, default: null })
   cardPaymentId: string | null;
+
+  @ManyToOne(() => CreditCardPayment, (payment) => payment.installments, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'cardPaymentId' })
+  cardPayment: Relation<CreditCardPayment | null>;
 }
