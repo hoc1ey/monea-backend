@@ -9,6 +9,8 @@ import { CreditCard } from '../../credit-cards/entities/credit-card.entity.js';
 import { Expense } from '../../expenses/entities/expense.entity.js';
 import { ExpenseInstallment } from '../../expenses/entities/expense-installment.entity.js';
 import { RecurringExpenseConfig } from '../../recurring-expenses/entities/recurring-expense-config.entity.js';
+import { Collection } from '../../collections/entities/collection.entity.js';
+import { CollectionInstallment } from '../../collections/entities/collection-installment.entity.js';
 
 @Entity('users')
 @Index('UQ_users_email_isDeleted', ['email'], { unique: true, where: '"isDeleted" = false' })
@@ -63,4 +65,13 @@ export class User extends BaseEntity {
     (config) => config.user,
   )
   recurringExpenseConfigs: Relation<RecurringExpenseConfig[]>;
+
+  @OneToMany(() => Collection, (collection) => collection.user)
+  collections: Relation<Collection[]>;
+
+  @OneToMany(
+    () => CollectionInstallment,
+    (installment) => installment.user,
+  )
+  collectionInstallments: Relation<CollectionInstallment[]>;
 }
