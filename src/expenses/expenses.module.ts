@@ -5,11 +5,13 @@ import { ExpenseInstallment } from './entities/expense-installment.entity.js';
 import { ExpensesService } from './expenses.service.js';
 import { ExpensesController } from './expenses.controller.js';
 import { AccountsModule } from '../accounts/accounts.module.js';
+import { CreditCardsModule } from '../credit-cards/credit-cards.module.js';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Expense, ExpenseInstallment]),
     AccountsModule,
+    CreditCardsModule,
   ],
   controllers: [ExpensesController],
   providers: [ExpensesService],
