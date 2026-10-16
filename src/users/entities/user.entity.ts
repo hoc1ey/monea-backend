@@ -13,6 +13,8 @@ import { Collection } from '../../collections/entities/collection.entity.js';
 import { CollectionInstallment } from '../../collections/entities/collection-installment.entity.js';
 import { Loan } from '../../loans/entities/loan.entity.js';
 import { LoanInstallment } from '../../loans/entities/loan-installment.entity.js';
+import { Debt } from '../../debts/entities/debt.entity.js';
+import { DebtInstallment } from '../../debts/entities/debt-installment.entity.js';
 
 @Entity('users')
 @Index('UQ_users_email_isDeleted', ['email'], { unique: true, where: '"isDeleted" = false' })
@@ -82,4 +84,10 @@ export class User extends BaseEntity {
 
   @OneToMany(() => LoanInstallment, (installment) => installment.user)
   loanInstallments: Relation<LoanInstallment[]>;
+
+  @OneToMany(() => Debt, (debt) => debt.user)
+  debts: Relation<Debt[]>;
+
+  @OneToMany(() => DebtInstallment, (installment) => installment.user)
+  debtInstallments: Relation<DebtInstallment[]>;
 }
