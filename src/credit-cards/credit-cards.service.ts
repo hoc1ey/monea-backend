@@ -8,17 +8,24 @@ import { Repository } from 'typeorm';
 import { CreditCard } from './entities/credit-card.entity.js';
 import { CreateCreditCardDto } from './dto/create-credit-card.dto.js';
 import { UpdateCreditCardDto } from './dto/update-credit-card.dto.js';
+import { ReminderService } from '../notifications/reminder.service.js';
+import { Reminder } from '../notifications/entities/reminder.entity.js';
+import { ReminderType } from '../notifications/notifications.constants.js';
+import { UsersService } from '../users/users.service.js';
+import { DateUtil } from '../common/utils/date.util.js';
 
 @Injectable()
 export class CreditCardsService {
   constructor(
     @InjectRepository(CreditCard)
     protected readonly creditCardRepository: Repository<CreditCard>,
+    private readonly reminderService: ReminderService,
+    private readonly usersService: UsersService,
   ) {}
 
   /**
    * Crea una tarjeta de crédito asociada al usuario autenticado.
-   * Si el recordatorio está activo, exige un día de pago.
+   * Si el recordatorio está activo, exige un día de pago y lo programa.
    */
   async create(userId: string, dto: CreateCreditCardDto) {
     const reminderEnabled = dto.reminderEnabled ?? false;
@@ -44,6 +51,10 @@ export class CreditCardsService {
     });
 
     const saved = await this.creditCardRepository.save(card);
+
+    if (saved.reminderEnabled) {
+      await this.scheduleNextPaymentReminder(saved);
+    }
 
     return {
       data: saved,
@@ -79,10 +90,18 @@ export class CreditCardsService {
   }
 
   /**
-   * Actualiza una tarjeta de crédito del usuario autenticado.
+   * Actualiza una tarjeta. Si cambian datos que afectan el recordatorio,
+   * lo reprograma (si sigue activo) o lo cancela (si se desactivó).
    */
   async update(userId: string, id: string, dto: UpdateCreditCardDto) {
     const card = await this.assertOwnership(userId, id);
+
+    const reminderFieldsChanged =
+      dto.reminderEnabled !== undefined ||
+      dto.paymentDay !== undefined ||
+      dto.reminderDaysBefore !== undefined ||
+      dto.reminderHour !== undefined ||
+      dto.name !== undefined;
 
     if (dto.name !== undefined) {
       card.name = dto.name;
@@ -123,6 +142,17 @@ export class CreditCardsService {
 
     const updated = await this.creditCardRepository.save(card);
 
+    if (reminderFieldsChanged) {
+      if (updated.reminderEnabled) {
+        await this.scheduleNextPaymentReminder(updated);
+      } else {
+        await this.reminderService.cancelBySource(
+          ReminderType.CREDIT_CARD_PAYMENT,
+          updated.id,
+        );
+      }
+    }
+
     return {
       data: updated,
       message: 'Tarjeta actualizada correctamente',
@@ -130,7 +160,8 @@ export class CreditCardsService {
   }
 
   /**
-   * Borrado lógico de la tarjeta. Las compras diferidas históricas y sus cuotas se conservan.
+   * Borrado lógico de la tarjeta y cancelación de sus recordatorios pendientes.
+   * Las compras diferidas históricas y sus cuotas se conservan.
    */
   async remove(userId: string, id: string) {
     const card = await this.assertOwnership(userId, id);
@@ -138,6 +169,11 @@ export class CreditCardsService {
     card.isDeleted = true;
     card.deletedAt = new Date();
     await this.creditCardRepository.save(card);
+
+    await this.reminderService.cancelBySource(
+      ReminderType.CREDIT_CARD_PAYMENT,
+      card.id,
+    );
 
     return {
       data: null,
@@ -159,5 +195,113 @@ export class CreditCardsService {
     }
 
     return card;
+  }
+
+  /**
+   * Calcula el próximo día de pago (ajustado al último día del mes cuando el mes
+   * tiene menos días), le resta `reminderDaysBefore` días y aplica `reminderHour`
+   * en la zona horaria del usuario. Reprograma el recordatorio CREDIT_CARD_PAYMENT.
+   */
+  async scheduleNextPaymentReminder(
+    card: CreditCard,
+  ): Promise<Reminder | null> {
+    if (!card.reminderEnabled || card.paymentDay == null) {
+      return null;
+    }
+
+    const user = await this.usersService.findById(card.userId);
+    const timezone = user.timezone || 'America/Bogota';
+
+    const scheduledAt = this.computeNextPaymentReminderAt(
+      card.paymentDay,
+      card.reminderDaysBefore,
+      card.reminderHour,
+      timezone,
+    );
+
+    return this.reminderService.reschedule(
+      ReminderType.CREDIT_CARD_PAYMENT,
+      card.id,
+      {
+        userId: card.userId,
+        type: ReminderType.CREDIT_CARD_PAYMENT,
+        sourceId: card.id,
+        title: `Pago de tarjeta ${card.name}`,
+        body: `Se aproxima la fecha de pago de tu tarjeta ${card.name} (terminación ${card.lastFourDigits}).`,
+        scheduledAt,
+      },
+    );
+  }
+
+  /**
+   * Devuelve la próxima fecha/hora (UTC) del recordatorio de pago.
+   * Recorre hasta 12 meses hacia adelante hasta encontrar una fecha futura.
+   */
+  private computeNextPaymentReminderAt(
+    paymentDay: number,
+    reminderDaysBefore: number,
+    reminderHour: number,
+    timezone: string,
+  ): Date {
+    const now = new Date();
+    const { year, month } = this.getYearMonthInTimezone(now, timezone);
+
+    for (let offset = 0; offset < 12; offset++) {
+      const paymentDate = this.buildPaymentDate(year, month + offset, paymentDay);
+      const scheduledAt = DateUtil.computeScheduledAt(
+        paymentDate,
+        reminderHour,
+        timezone,
+        -reminderDaysBefore,
+      );
+
+      if (scheduledAt.getTime() > now.getTime()) {
+        return scheduledAt;
+      }
+    }
+
+    return DateUtil.computeScheduledAt(
+      this.buildPaymentDate(year, month + 12, paymentDay),
+      reminderHour,
+      timezone,
+      -reminderDaysBefore,
+    );
+  }
+
+  /**
+   * Construye la fecha de pago (UTC, a medianoche) ajustando el día al último del mes
+   * cuando el mes destino tiene menos días (p. ej. día 31 en febrero → 28/29).
+   */
+  private buildPaymentDate(
+    year: number,
+    monthIndex: number,
+    paymentDay: number,
+  ): Date {
+    const lastDay = new Date(Date.UTC(year, monthIndex + 1, 0)).getUTCDate();
+    const day = Math.min(paymentDay, lastDay);
+    return new Date(Date.UTC(year, monthIndex, day));
+  }
+
+  /**
+   * Obtiene el año y mes (0-indexado) actuales en la zona horaria indicada.
+   */
+  private getYearMonthInTimezone(
+    date: Date,
+    timezone: string,
+  ): { year: number; month: number } {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: 'numeric',
+    }).formatToParts(date);
+
+    const map: Record<string, number> = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') {
+        map[part.type] = Number(part.value);
+      }
+    }
+
+    return { year: map.year, month: map.month - 1 };
   }
 }
