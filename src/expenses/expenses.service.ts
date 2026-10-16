@@ -32,6 +32,7 @@ export interface CreateExpenseInternalInput {
   graceMonths?: number;
   amountPending?: boolean;
   recurringConfigId?: string | null;
+  occurrenceDate?: string | null;
   sourceType: ExpenseSourceType;
   sourceId: string | null;
 }
@@ -49,6 +50,7 @@ interface PersistExpenseParams {
   graceMonths: number;
   amountPending: boolean;
   recurringConfigId: string | null;
+  occurrenceDate: string | null;
   sourceType: ExpenseSourceType;
   sourceId: string | null;
 }
@@ -117,6 +119,7 @@ export class ExpensesService {
               : 0,
           amountPending: false,
           recurringConfigId: null,
+          occurrenceDate: null,
           sourceType: ExpenseSourceType.MANUAL,
           sourceId: null,
         },
@@ -178,6 +181,7 @@ export class ExpensesService {
               : 0,
           amountPending: input.amountPending ?? false,
           recurringConfigId: input.recurringConfigId ?? null,
+          occurrenceDate: input.occurrenceDate ?? null,
           sourceType: input.sourceType,
           sourceId: input.sourceId,
         },
@@ -546,6 +550,7 @@ export class ExpensesService {
       graceMonths: params.graceMonths,
       amountPending: params.amountPending,
       recurringConfigId: params.recurringConfigId,
+      occurrenceDate: params.occurrenceDate,
       sourceType: params.sourceType,
       sourceId: params.sourceId,
     });

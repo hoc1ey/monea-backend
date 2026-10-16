@@ -265,6 +265,7 @@ export class CreditCardBillingService {
         graceMonths: 0,
         amountPending: false,
         recurringConfigId: null,
+        occurrenceDate: null,
         sourceType: ExpenseSourceType.CARD_PAYMENT,
         sourceId: paymentId,
       });

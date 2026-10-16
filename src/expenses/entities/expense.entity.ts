@@ -11,6 +11,7 @@ import { BaseEntity } from '../../common/entities/base.entity.js';
 import { User } from '../../users/entities/user.entity.js';
 import { Account } from '../../accounts/entities/account.entity.js';
 import { CreditCard } from '../../credit-cards/entities/credit-card.entity.js';
+import { RecurringExpenseConfig } from '../../recurring-expenses/entities/recurring-expense-config.entity.js';
 import { decimalTransformer } from '../../common/transformers/decimal.transformer.js';
 import { ExpenseInstallment } from './expense-installment.entity.js';
 import {
@@ -23,6 +24,7 @@ import {
 @Index(['accountId', 'isDeleted'])
 @Index(['creditCardId', 'isDeleted'])
 @Index(['sourceType', 'sourceId'])
+@Index(['recurringConfigId', 'occurrenceDate'], { unique: true })
 export class Expense extends BaseEntity {
   @Index()
   @Column({ type: 'uuid' })
@@ -88,6 +90,16 @@ export class Expense extends BaseEntity {
 
   @Column({ type: 'uuid', nullable: true, default: null })
   recurringConfigId: string | null;
+
+  @ManyToOne(() => RecurringExpenseConfig, (config) => config.expenses, {
+    onDelete: 'SET NULL',
+    nullable: true,
+  })
+  @JoinColumn({ name: 'recurringConfigId' })
+  recurringConfig: Relation<RecurringExpenseConfig | null>;
+
+  @Column({ type: 'date', nullable: true, default: null })
+  occurrenceDate: string | null;
 
   @Column({
     type: 'enum',
