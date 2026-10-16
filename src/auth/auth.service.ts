@@ -255,7 +255,7 @@ export class AuthService {
     const tokenHash = createHash('sha256').update(rawRefreshToken).digest('hex');
 
     const token = await this.refreshTokenRepository.findOne({
-      where: { tokenHash },
+      where: { tokenHash, isDeleted: false },
       relations: { user: true },
     });
 
@@ -266,7 +266,7 @@ export class AuthService {
     // Detección de reutilización: si ya fue revocado, invalidar toda la familia
     if (token.revokedAt !== null) {
       await this.refreshTokenRepository.update(
-        { familyId: token.familyId },
+        { familyId: token.familyId, isDeleted: false },
         { revokedAt: new Date() },
       );
       await this.logoutAll(token.userId);
@@ -284,7 +284,7 @@ export class AuthService {
     // Obtener el ID del nuevo refresh token para enlazarlo
     const newTokenHash = createHash('sha256').update(newTokens.refreshToken).digest('hex');
     const newSavedToken = await this.refreshTokenRepository.findOne({
-      where: { tokenHash: newTokenHash },
+      where: { tokenHash: newTokenHash, isDeleted: false },
     });
 
     // Revocar el token actual marcando replacedByTokenId
@@ -307,7 +307,7 @@ export class AuthService {
     if (rawRefreshToken) {
       const tokenHash = createHash('sha256').update(rawRefreshToken).digest('hex');
       await this.refreshTokenRepository.update(
-        { tokenHash, userId },
+        { tokenHash, userId, isDeleted: false },
         { revokedAt: new Date() },
       );
     }

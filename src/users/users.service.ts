@@ -170,7 +170,7 @@ export class UsersService {
    */
   async registerFailedAttempt(user: User, lockedUntil: Date | null): Promise<void> {
     await this.userRepository.update(
-      { id: user.id },
+      { id: user.id, isDeleted: false },
       {
         failedLoginAttempts: user.failedLoginAttempts + 1,
         lockedUntil,
@@ -183,7 +183,7 @@ export class UsersService {
    */
   async resetFailedAttempts(user: User): Promise<void> {
     await this.userRepository.update(
-      { id: user.id },
+      { id: user.id, isDeleted: false },
       {
         failedLoginAttempts: 0,
         lockedUntil: null,
