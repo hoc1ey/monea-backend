@@ -1,0 +1,13 @@
+export enum ExpensePaymentMethod {
+  CORRIENTE = 'CORRIENTE',
+  DIFERIDO = 'DIFERIDO',
+}
+
+export enum ExpenseSourceType {
+  MANUAL = 'MANUAL',
+  RECURRING = 'RECURRING',
+  CARD_PAYMENT = 'CARD_PAYMENT',
+  LOAN_CREATION = 'LOAN_CREATION',
+  DEBT_PAYMENT = 'DEBT_PAYMENT',
+  SHOPPING_LIST = 'SHOPPING_LIST',
+}
