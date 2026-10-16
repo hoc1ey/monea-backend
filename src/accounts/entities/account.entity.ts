@@ -13,6 +13,7 @@ import { decimalTransformer } from '../../common/transformers/decimal.transforme
 import { Income } from '../../incomes/entities/income.entity.js';
 import { Expense } from '../../expenses/entities/expense.entity.js';
 import { RecurringExpenseConfig } from '../../recurring-expenses/entities/recurring-expense-config.entity.js';
+import { Loan } from '../../loans/entities/loan.entity.js';
 
 @Entity('accounts')
 @Index(['userId', 'isDeleted'])
@@ -56,4 +57,7 @@ export class Account extends BaseEntity {
     (config) => config.account,
   )
   recurringExpenseConfigs: Relation<RecurringExpenseConfig[]>;
+
+  @OneToMany(() => Loan, (loan) => loan.account)
+  loans: Relation<Loan[]>;
 }

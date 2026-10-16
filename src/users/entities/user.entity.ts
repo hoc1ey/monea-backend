@@ -11,6 +11,8 @@ import { ExpenseInstallment } from '../../expenses/entities/expense-installment.
 import { RecurringExpenseConfig } from '../../recurring-expenses/entities/recurring-expense-config.entity.js';
 import { Collection } from '../../collections/entities/collection.entity.js';
 import { CollectionInstallment } from '../../collections/entities/collection-installment.entity.js';
+import { Loan } from '../../loans/entities/loan.entity.js';
+import { LoanInstallment } from '../../loans/entities/loan-installment.entity.js';
 
 @Entity('users')
 @Index('UQ_users_email_isDeleted', ['email'], { unique: true, where: '"isDeleted" = false' })
@@ -74,4 +76,10 @@ export class User extends BaseEntity {
     (installment) => installment.user,
   )
   collectionInstallments: Relation<CollectionInstallment[]>;
+
+  @OneToMany(() => Loan, (loan) => loan.user)
+  loans: Relation<Loan[]>;
+
+  @OneToMany(() => LoanInstallment, (installment) => installment.user)
+  loanInstallments: Relation<LoanInstallment[]>;
 }
