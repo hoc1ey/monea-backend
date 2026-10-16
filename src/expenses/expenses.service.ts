@@ -11,6 +11,7 @@ import { CreditCard } from '../credit-cards/entities/credit-card.entity.js';
 import { CreateExpenseDto } from './dto/create-expense.dto.js';
 import { UpdateExpenseDto } from './dto/update-expense.dto.js';
 import { QueryExpenseDto } from './dto/query-expense.dto.js';
+import { SetExpenseAmountDto } from './dto/set-amount.dto.js';
 import {
   ExpensePaymentMethod,
   ExpenseSourceType,
@@ -437,6 +438,36 @@ export class ExpensesService {
       data: result.data,
       message: 'Egreso actualizado correctamente',
     }));
+  }
+
+  /**
+   * Fija el monto definitivo de un egreso variable (recurrente de monto no
+   * definido) y limpia la bandera amountPending.
+   */
+  async setAmount(userId: string, id: string, dto: SetExpenseAmountDto) {
+    const expense = await this.expenseRepository.findOne({
+      where: { id, userId, isDeleted: false },
+    });
+
+    if (!expense) {
+      throw new NotFoundException('Egreso no encontrado');
+    }
+
+    if (!expense.amountPending) {
+      throw new BadRequestException(
+        'Este egreso no tiene el monto pendiente por definir',
+      );
+    }
+
+    expense.amount = dto.amount;
+    expense.amountPending = false;
+
+    const saved = await this.expenseRepository.save(expense);
+
+    return {
+      data: saved,
+      message: 'Monto del egreso actualizado correctamente',
+    };
   }
 
   /**

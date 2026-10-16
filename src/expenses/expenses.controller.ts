@@ -22,6 +22,7 @@ import { ExpensesService } from './expenses.service.js';
 import { CreateExpenseDto } from './dto/create-expense.dto.js';
 import { UpdateExpenseDto } from './dto/update-expense.dto.js';
 import { QueryExpenseDto } from './dto/query-expense.dto.js';
+import { SetExpenseAmountDto } from './dto/set-amount.dto.js';
 import {
   ExpenseResponseDto,
   PaginatedExpenseResponseDto,
@@ -87,6 +88,31 @@ export class ExpensesController {
     @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
   ) {
     return this.expensesService.findOne(userId, id);
+  }
+
+  @Patch(':id/amount')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Fijar el monto de un egreso variable (amountPending = true)',
+  })
+  @ApiParam({ name: 'id', description: 'ID del egreso (UUID)' })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Monto del egreso actualizado correctamente',
+    type: ExpenseResponseDto,
+  })
+  @SwaggerApiResponse({
+    status: 400,
+    description: 'El egreso no tiene el monto pendiente por definir',
+  })
+  @SwaggerApiResponse({ status: 401, description: 'No autenticado' })
+  @SwaggerApiResponse({ status: 404, description: 'Egreso no encontrado' })
+  async setAmount(
+    @CurrentUser('id') userId: string,
+    @Param('id', new ParseUUIDPipe({ version: '4' })) id: string,
+    @Body() dto: SetExpenseAmountDto,
+  ) {
+    return this.expensesService.setAmount(userId, id, dto);
   }
 
   @Patch(':id')
