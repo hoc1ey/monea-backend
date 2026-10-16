@@ -12,6 +12,7 @@ import { User } from '../../users/entities/user.entity.js';
 import { decimalTransformer } from '../../common/transformers/decimal.transformer.js';
 import { Expense } from '../../expenses/entities/expense.entity.js';
 import { ExpenseInstallment } from '../../expenses/entities/expense-installment.entity.js';
+import { CreditCardPayment } from './credit-card-payment.entity.js';
 
 @Entity('credit_cards')
 @Index(['userId', 'isDeleted'])
@@ -66,4 +67,7 @@ export class CreditCard extends BaseEntity {
 
   @OneToMany(() => ExpenseInstallment, (installment) => installment.creditCard)
   installments: Relation<ExpenseInstallment[]>;
+
+  @OneToMany(() => CreditCardPayment, (payment) => payment.creditCard)
+  payments: Relation<CreditCardPayment[]>;
 }

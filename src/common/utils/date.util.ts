@@ -12,10 +12,47 @@ export class DateUtil {
   }
 
   /**
+   * Formatea una fecha al periodo mensual YYYY-MM según la zona horaria del usuario
+   */
+  static formatPeriodInTimezone(date: Date, timezone: string): string {
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: 'numeric',
+    }).formatToParts(date);
+
+    const map: Record<string, string> = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') {
+        map[part.type] = part.value;
+      }
+    }
+
+    return `${map.year}-${String(Number(map.month)).padStart(2, '0')}`;
+  }
+
+  /**
    * Valida si un string cumple el formato mensual YYYY-MM
    */
   static isValidPeriod(period: string): boolean {
     return /^\d{4}-(0[1-9]|1[0-2])$/.test(period);
+  }
+
+  /**
+   * Convierte un periodo YYYY-MM a su índice absoluto de mes (año * 12 + mes0).
+   */
+  static periodToIndex(period: string): number {
+    const [year, month] = period.split('-').map(Number);
+    return year * 12 + (month - 1);
+  }
+
+  /**
+   * Convierte un índice absoluto de mes a un periodo YYYY-MM.
+   */
+  static indexToPeriod(index: number): string {
+    const year = Math.floor(index / 12);
+    const month = (index % 12) + 1;
+    return `${year}-${String(month).padStart(2, '0')}`;
   }
 
   /**
