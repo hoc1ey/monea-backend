@@ -16,6 +16,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
 import { IncomesModule } from './incomes/incomes.module.js';
 import { CreditCardsModule } from './credit-cards/credit-cards.module.js';
 import { ExpensesModule } from './expenses/expenses.module.js';
+import { RecurringExpensesModule } from './recurring-expenses/recurring-expenses.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RateLimitGuard } from './common/guards/rate-limit.guard.js';
 import { Redis } from 'ioredis';
@@ -72,6 +73,7 @@ import { REDIS_CLIENT } from './config/redis.module.js';
     IncomesModule,
     CreditCardsModule,
     ExpensesModule,
+    RecurringExpensesModule,
   ],
   controllers: [],
   providers: [
