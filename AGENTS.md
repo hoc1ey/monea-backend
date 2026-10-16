@@ -26,6 +26,7 @@ Feature specs live in `docs/features/FEATURE_N.md`; global rules in
 - New modules are direct children of `src/` and must be registered in `app.module.ts`. Module/entity/DTO layout mirrors `incomes/` and `credit-cards/`.
 - Schedulers run only when `SCHEDULER_ENABLED=true` and take a Redis `SET ... NX EX` lock (keys `lock:reminders`, every minute; `lock:recurring-expenses`, every hour). Acceptance tests force work with SQL (e.g. `nextRunAt = now() - interval '1 minute'`) and wait for a cycle.
 - Recurrences go through `common/utils/recurrence.util.ts`. `RecurringExpenseConfig.nextRunAt` stores the UTC instant of the occurrence's local midnight (`User.timezone`). `create` derives it from `startDate`; `update`/reactivate recompute from today (no backfill).
+- Installment plans for Cobros/Préstamos/Deudas go through `common/utils/installment-schedule.builder.ts` (`InstallmentScheduleBuilder.build`), which returns `{ number, amount, dueDate }` (last installment absorbs the rounding residue; `dueDate` is the UTC instant at the reminder hour in `User.timezone`, or `null` when reminders are off). Collection reminders are one row per installment with `sourceId = installmentId` (`ReminderType.COLLECTION`), so cancel/reschedule them individually; the collection reminder fields live on `Collection`, not the installment.
 
 ## Gotchas
 - class-validator `@ValidateIf` conditions on the same property are combined with AND, so do not stack mutually exclusive conditions. Put the "required when X" rule in the DTO and enforce the "forbidden when not X" rule in the service.
