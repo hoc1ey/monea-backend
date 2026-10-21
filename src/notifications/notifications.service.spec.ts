@@ -15,6 +15,7 @@ describe('NotificationsService', () => {
     mockDeviceRepo = {
       findOne: vi.fn(),
       find: vi.fn(),
+      count: vi.fn(),
       create: vi.fn(),
       save: vi.fn(),
       update: vi.fn(),
@@ -102,6 +103,20 @@ describe('NotificationsService', () => {
       await expect(
         service.unregisterDevice('user-1', 'token-inexistente'),
       ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  describe('sendTestNotification', () => {
+    it('debe lanzar NotFoundException si el usuario no tiene dispositivos activos', async () => {
+      vi.mocked(mockDeviceRepo.count!).mockResolvedValue(0);
+
+      await expect(service.sendTestNotification('user-1')).rejects.toThrow(
+        NotFoundException,
+      );
+
+      expect(mockDeviceRepo.count).toHaveBeenCalledWith({
+        where: { userId: 'user-1', isActive: true, isDeleted: false },
+      });
     });
   });
 

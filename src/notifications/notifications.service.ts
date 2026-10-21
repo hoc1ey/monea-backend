@@ -87,6 +87,28 @@ export class NotificationsService {
   }
 
   /**
+   * Envía una notificación de prueba a todos los dispositivos activos del usuario autenticado.
+   * Lanza NotFoundException si el usuario no tiene dispositivos registrados.
+   */
+  async sendTestNotification(
+    userId: string,
+  ): Promise<{ sentCount: number; failureCount: number }> {
+    const deviceCount = await this.deviceTokenRepository.count({
+      where: { userId, isActive: true, isDeleted: false },
+    });
+
+    if (deviceCount === 0) {
+      throw new NotFoundException('No tiene dispositivos registrados');
+    }
+
+    return this.sendToUser(userId, {
+      title: 'Notificación de prueba',
+      body: 'Esta es una notificación de prueba de Monea',
+      data: { type: 'TEST' },
+    });
+  }
+
+  /**
    * Envía una notificación push a todos los tokens activos del usuario mediante sendEachForMulticast.
    * Los tokens que reporten 'registration-token-not-registered' o 'invalid-registration-token' se desactivan.
    */
