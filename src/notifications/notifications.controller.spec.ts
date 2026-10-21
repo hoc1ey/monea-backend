@@ -13,6 +13,7 @@ describe('NotificationsController', () => {
     mockNotificationsService = {
       registerDevice: vi.fn(),
       unregisterDevice: vi.fn(),
+      sendTestNotification: vi.fn(),
     };
 
     mockReminderService = {
@@ -52,6 +53,21 @@ describe('NotificationsController', () => {
       'user-1',
       'fcm-123',
     );
+  });
+
+  it('sendTestNotification debe invocar notificationsService.sendTestNotification con userId', async () => {
+    const counts = { sentCount: 2, failureCount: 0 };
+    vi.mocked(mockNotificationsService.sendTestNotification!).mockResolvedValue(
+      counts,
+    );
+
+    const result = await controller.sendTestNotification('user-1');
+
+    expect(result.message).toBe('Notificación de prueba enviada');
+    expect(result.data).toEqual(counts);
+    expect(
+      mockNotificationsService.sendTestNotification,
+    ).toHaveBeenCalledWith('user-1');
   });
 
   it('getUpcomingReminders debe invocar reminderService.findUpcoming con userId', async () => {

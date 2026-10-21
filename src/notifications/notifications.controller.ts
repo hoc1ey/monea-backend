@@ -69,6 +69,22 @@ export class NotificationsController {
     };
   }
 
+  @Post('test')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Enviar notificación de prueba a todos los dispositivos registrados del usuario autenticado',
+  })
+  @SwaggerApiResponse({ status: 200, description: 'Notificación de prueba enviada' })
+  @SwaggerApiResponse({ status: 401, description: 'No autenticado' })
+  @SwaggerApiResponse({ status: 404, description: 'No tiene dispositivos registrados' })
+  async sendTestNotification(@CurrentUser('id') userId: string) {
+    const result = await this.notificationsService.sendTestNotification(userId);
+    return {
+      data: result,
+      message: 'Notificación de prueba enviada',
+    };
+  }
+
   @Get('reminders')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
