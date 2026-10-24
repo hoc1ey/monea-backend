@@ -3,12 +3,15 @@ import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types.js';
 import { randomUUID } from 'node:crypto';
+import type { Redis } from 'ioredis';
 import { AppModule } from './../src/app.module.js';
+import { REDIS_CLIENT } from './../src/config/redis.module.js';
 import { ResponseInterceptor } from './../src/common/interceptors/response.interceptor.js';
 import { AllExceptionsFilter } from './../src/common/filters/all-exceptions.filter.js';
 
 describe('Auth (e2e)', () => {
   let app: INestApplication<App>;
+  let redis: Redis;
 
   const email = `e2e.${randomUUID()}@monea.test`;
   const password = 'ClaveSegura123';
@@ -22,6 +25,7 @@ describe('Auth (e2e)', () => {
       imports: [AppModule],
     }).compile();
 
+    redis = moduleFixture.get<Redis>(REDIS_CLIENT);
     app = moduleFixture.createNestApplication();
     app.setGlobalPrefix('api/v1', {
       exclude: ['health'],
@@ -43,7 +47,7 @@ describe('Auth (e2e)', () => {
     await app.close();
   });
 
-  it('register -> devuelve 201 con el contrato estándar y tokens', async () => {
+  it('register -> devuelve 201 con el correo y el resultado del registro', async () => {
     const response = await request(server())
       .post('/api/v1/auth/register')
       .send({ email, password, name: 'E2E User' });
@@ -52,11 +56,13 @@ describe('Auth (e2e)', () => {
     expect(response.body).toMatchObject({
       success: true,
       statusCode: 201,
-      message: 'Usuario registrado correctamente',
+      message:
+        'Usuario registrado correctamente. Revisa tu correo para verificar la cuenta',
       errors: null,
+      data: { email, registered: true },
     });
-    expect(response.body.data.accessToken).toEqual(expect.any(String));
-    expect(response.body.data.refreshToken).toEqual(expect.any(String));
+    expect(response.body.data.accessToken).toBeUndefined();
+    expect(response.body.data.refreshToken).toBeUndefined();
   });
 
   it('register con datos inválidos devuelve 400 con errores por campo', async () => {
@@ -74,7 +80,47 @@ describe('Auth (e2e)', () => {
     expect(response.body.errors.length).toBeGreaterThan(0);
   });
 
-  it('login -> devuelve 200 con nuevos tokens', async () => {
+  it('login sin verificar -> success true con email y emailVerified=false, sin tokens', async () => {
+    const response = await request(server())
+      .post('/api/v1/auth/login')
+      .send({ email, password });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: 200,
+      message: 'Debes verificar tu correo electrónico para iniciar sesión',
+      errors: null,
+      data: { email, emailVerified: false },
+    });
+    expect(response.body.data.accessToken).toBeUndefined();
+    expect(response.body.data.refreshToken).toBeUndefined();
+  });
+
+  it('verify -> valida el código y devuelve los tokens de sesión', async () => {
+    const code = await redis.get(`auth:email-verification:${email}`);
+    expect(code).toMatch(/^\d{6}$/);
+
+    const response = await request(server())
+      .post('/api/v1/auth/verify')
+      .send({ email, code });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toMatchObject({
+      success: true,
+      statusCode: 200,
+      message: 'Correo verificado correctamente',
+      errors: null,
+    });
+    expect(response.body.data.accessToken).toEqual(expect.any(String));
+    expect(response.body.data.refreshToken).toEqual(expect.any(String));
+    expect(response.body.data.user.emailVerified).toBe(true);
+
+    accessToken = response.body.data.accessToken;
+    refreshToken = response.body.data.refreshToken;
+  });
+
+  it('login después de verificar -> devuelve 200 con nuevos tokens', async () => {
     const response = await request(server())
       .post('/api/v1/auth/login')
       .send({ email, password });

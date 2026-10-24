@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { HttpException, UnauthorizedException } from '@nestjs/common';
+import {
+  BadRequestException,
+  HttpException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import * as argon2 from 'argon2';
 import type { JwtService } from '@nestjs/jwt';
 import type { ConfigService } from '@nestjs/config';
@@ -7,6 +11,7 @@ import type { Repository } from 'typeorm';
 import type { Redis } from 'ioredis';
 import { AuthService } from './auth.service.js';
 import type { UsersService } from '../users/users.service.js';
+import type { MailService } from '../mail/mail.service.js';
 import type { RefreshToken } from './entities/refresh-token.entity.js';
 import type { User } from '../users/entities/user.entity.js';
 
@@ -25,6 +30,7 @@ const CONFIG: Record<string, number | string> = {
   ACCOUNT_LOCK_9_PLUS_MINUTES: 300,
   IP_LOCK_WINDOW_MINUTES: 5,
   IP_LOCK_MINUTES: 15,
+  EMAIL_VERIFICATION_CODE_TTL_MINUTES: 15,
 };
 
 async function expectHttpStatus(
@@ -49,6 +55,8 @@ function makeUser(overrides: Partial<User> = {}): User {
     passwordHash: 'hash',
     failedLoginAttempts: 0,
     lockedUntil: null,
+    emailVerified: true,
+    mustChangePassword: false,
     isDeleted: false,
     deletedAt: null,
     createdAt: new Date(),
@@ -60,9 +68,16 @@ function makeUser(overrides: Partial<User> = {}): User {
 describe('AuthService', () => {
   let service: AuthService;
   let usersService: {
+    create: ReturnType<typeof vi.fn>;
     findByEmail: ReturnType<typeof vi.fn>;
     registerFailedAttempt: ReturnType<typeof vi.fn>;
     resetFailedAttempts: ReturnType<typeof vi.fn>;
+    markEmailVerified: ReturnType<typeof vi.fn>;
+    setPassword: ReturnType<typeof vi.fn>;
+  };
+  let mailService: {
+    sendVerificationCode: ReturnType<typeof vi.fn>;
+    sendTemporaryPassword: ReturnType<typeof vi.fn>;
   };
   let redis: {
     get: ReturnType<typeof vi.fn>;
@@ -85,9 +100,17 @@ describe('AuthService', () => {
     vi.clearAllMocks();
 
     usersService = {
+      create: vi.fn(),
       findByEmail: vi.fn(),
       registerFailedAttempt: vi.fn().mockResolvedValue(undefined),
       resetFailedAttempts: vi.fn().mockResolvedValue(undefined),
+      markEmailVerified: vi.fn().mockResolvedValue(undefined),
+      setPassword: vi.fn().mockResolvedValue(undefined),
+    };
+
+    mailService = {
+      sendVerificationCode: vi.fn().mockResolvedValue(undefined),
+      sendTemporaryPassword: vi.fn().mockResolvedValue(undefined),
     };
 
     redis = {
@@ -126,9 +149,164 @@ describe('AuthService', () => {
       usersService as unknown as UsersService,
       jwtService,
       configService,
+      mailService as unknown as MailService,
       refreshTokenRepository,
       redis as unknown as Redis,
     );
+  });
+
+  describe('registro y verificación de correo', () => {
+    it('registra al usuario, guarda el código 6 dígitos en Redis y envía el correo', async () => {
+      usersService.create.mockResolvedValue(makeUser());
+
+      const result = await service.register({
+        email: 'test@monea.com',
+        password: 'Password123',
+        name: 'Test',
+      });
+
+      expect(result).toEqual({ email: 'test@monea.com', registered: true });
+      expect(redis.set).toHaveBeenCalledWith(
+        'auth:email-verification:test@monea.com',
+        expect.stringMatching(/^\d{6}$/),
+        'EX',
+        900,
+      );
+      expect(mailService.sendVerificationCode).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'test@monea.com',
+          code: expect.stringMatching(/^\d{6}$/),
+          expiresInMinutes: 15,
+        }),
+      );
+    });
+
+    it('mantiene el registro exitoso aunque falle el envío del correo', async () => {
+      usersService.create.mockResolvedValue(makeUser());
+      mailService.sendVerificationCode.mockRejectedValue(new Error('SMTP caído'));
+
+      await expect(
+        service.register({
+          email: 'test@monea.com',
+          password: 'Password123',
+          name: 'Test',
+        }),
+      ).resolves.toEqual({ email: 'test@monea.com', registered: true });
+    });
+
+    it('verifica el correo, elimina el código y devuelve los tokens de sesión', async () => {
+      usersService.findByEmail.mockResolvedValue(makeUser());
+      redis.get.mockResolvedValue('123456');
+
+      const result = await service.verifyEmail(
+        { email: 'test@monea.com', code: '123456' },
+        ctx,
+      );
+
+      expect(result.accessToken).toBe('signed.jwt.token');
+      expect(result.user.emailVerified).toBe(true);
+      expect(usersService.markEmailVerified).toHaveBeenCalledWith('user-1');
+      expect(redis.del).toHaveBeenCalledWith(
+        'auth:email-verification:test@monea.com',
+      );
+    });
+
+    it('rechaza un código incorrecto sin marcar el correo', async () => {
+      usersService.findByEmail.mockResolvedValue(makeUser());
+      redis.get.mockResolvedValue('123456');
+
+      await expect(
+        service.verifyEmail(
+          { email: 'test@monea.com', code: '654321' },
+          ctx,
+        ),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(usersService.markEmailVerified).not.toHaveBeenCalled();
+      expect(redis.del).not.toHaveBeenCalled();
+    });
+
+    it('rechaza la verificación si el código expiró', async () => {
+      usersService.findByEmail.mockResolvedValue(makeUser());
+      redis.get.mockResolvedValue(null);
+
+      await expect(
+        service.verifyEmail(
+          { email: 'test@monea.com', code: '123456' },
+          ctx,
+        ),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('reenvía el código a un correo no verificado', async () => {
+      usersService.findByEmail.mockResolvedValue(
+        makeUser({ emailVerified: false }),
+      );
+
+      const result = await service.resendVerification('test@monea.com');
+
+      expect(result.sent).toBe(true);
+      expect(mailService.sendVerificationCode).toHaveBeenCalledTimes(1);
+    });
+
+    it('no revela ni envía nada cuando el correo no existe al reenviar', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+
+      const result = await service.resendVerification('missing@monea.com');
+
+      expect(result.sent).toBe(true);
+      expect(mailService.sendVerificationCode).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('recuperación de contraseña', () => {
+    it('no revela si el correo existe y responde sent=true', async () => {
+      usersService.findByEmail.mockResolvedValue(null);
+
+      const result = await service.forgotPassword('missing@monea.com');
+
+      expect(result.sent).toBe(true);
+      expect(result.message).toContain('Si el correo missing@monea.com existe');
+      expect(mailService.sendTemporaryPassword).not.toHaveBeenCalled();
+      expect(usersService.setPassword).not.toHaveBeenCalled();
+    });
+
+    it('genera una contraseña temporal de 8 caracteres y obliga el cambio', async () => {
+      usersService.findByEmail.mockResolvedValue(makeUser());
+      vi.mocked(argon2.hash).mockResolvedValue('temporary-hash');
+
+      const result = await service.forgotPassword('test@monea.com');
+
+      expect(result.sent).toBe(true);
+      expect(usersService.setPassword).toHaveBeenCalledWith(
+        'user-1',
+        'temporary-hash',
+        true,
+      );
+      expect(mailService.sendTemporaryPassword).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'test@monea.com',
+          temporaryPassword: expect.stringMatching(
+            /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8}$/,
+          ),
+        }),
+      );
+    });
+
+    it('revierte la contraseña y responde sent=false si falla el correo', async () => {
+      usersService.findByEmail.mockResolvedValue(makeUser());
+      vi.mocked(argon2.hash).mockResolvedValue('temporary-hash');
+      mailService.sendTemporaryPassword.mockRejectedValue(new Error('SMTP caído'));
+
+      const result = await service.forgotPassword('test@monea.com');
+
+      expect(result.sent).toBe(false);
+      expect(usersService.setPassword).toHaveBeenLastCalledWith(
+        'user-1',
+        'hash',
+        false,
+      );
+    });
   });
 
   describe('computeAccountLock', () => {
@@ -229,6 +407,47 @@ describe('AuthService', () => {
         'EX',
         900,
       );
+    });
+
+    it('devuelve solo el correo y emailVerified=false cuando falta verificar', async () => {
+      usersService.findByEmail.mockResolvedValue(
+        makeUser({ emailVerified: false }),
+      );
+      vi.mocked(argon2.verify).mockResolvedValue(true);
+
+      const result = await service.login(
+        { email: 'test@monea.com', password: 'good' },
+        ctx,
+      );
+
+      expect(result).toEqual({
+        email: 'test@monea.com',
+        emailVerified: false,
+      });
+      expect(result).not.toHaveProperty('accessToken');
+      expect(redis.set).not.toHaveBeenCalledWith(
+        expect.stringContaining('auth:access:'),
+        expect.anything(),
+        'EX',
+        expect.anything(),
+      );
+    });
+
+    it('emite tokens y marca mustChangePassword=true cuando debe actualizar la contraseña', async () => {
+      usersService.findByEmail.mockResolvedValue(
+        makeUser({ mustChangePassword: true }),
+      );
+      vi.mocked(argon2.verify).mockResolvedValue(true);
+
+      const result = await service.login(
+        { email: 'test@monea.com', password: 'temporary' },
+        ctx,
+      );
+
+      expect(result).toMatchObject({
+        accessToken: 'signed.jwt.token',
+        user: { mustChangePassword: true },
+      });
     });
 
     it('bloquea el login antes de buscar al usuario si la IP está bloqueada', async () => {

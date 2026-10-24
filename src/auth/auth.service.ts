@@ -1,5 +1,7 @@
 import {
   Injectable,
+  Logger,
+  BadRequestException,
   UnauthorizedException,
   HttpException,
   HttpStatus,
@@ -10,18 +12,36 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Redis } from 'ioredis';
-import { randomBytes, randomUUID, createHash } from 'crypto';
+import {
+  randomBytes,
+  randomUUID,
+  createHash,
+  timingSafeEqual,
+} from 'crypto';
 import * as argon2 from 'argon2';
 import { REDIS_CLIENT } from '../config/redis.module.js';
 import { UsersService } from '../users/users.service.js';
 import { User } from '../users/entities/user.entity.js';
+import { MailService } from '../mail/mail.service.js';
+import {
+  generateTemporaryPassword,
+  generateVerificationCode,
+} from '../common/utils/password.util.js';
 import { RefreshToken } from './entities/refresh-token.entity.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
+import { VerifyEmailDto } from './dto/verify-email.dto.js';
+
+const EMAIL_VERIFICATION_KEY_PREFIX = 'auth:email-verification:';
 
 export interface RequestContext {
   ip: string;
   userAgent: string;
+}
+
+export interface RegisterResponse {
+  email: string;
+  registered: boolean;
 }
 
 export interface AuthTokensResponse {
@@ -34,15 +54,29 @@ export interface AuthTokensResponse {
     email: string;
     name: string;
     timezone: string;
+    emailVerified: boolean;
+    mustChangePassword: boolean;
   };
 }
 
+export interface EmailVerificationRequiredResponse {
+  email: string;
+  emailVerified: false;
+}
+
+export type LoginResponse =
+  | AuthTokensResponse
+  | EmailVerificationRequiredResponse;
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly mailService: MailService,
     @InjectRepository(RefreshToken)
     private readonly refreshTokenRepository: Repository<RefreshToken>,
     @Inject(REDIS_CLIENT)
@@ -50,17 +84,167 @@ export class AuthService {
   ) {}
 
   /**
-   * Registro de un nuevo usuario con emisión de tokens.
+   * Registro de un nuevo usuario. Envía un código de verificación al correo
+   * y no emite tokens hasta que el usuario inicie sesión.
    */
-  async register(dto: RegisterDto, ctx: RequestContext): Promise<AuthTokensResponse> {
+  async register(dto: RegisterDto): Promise<RegisterResponse> {
     const user = await this.usersService.create(dto);
-    return this.issueTokens(user as User, ctx);
+    await this.storeAndSendVerificationCode(user.email, user.name);
+
+    return { email: user.email, registered: true };
+  }
+
+  /**
+   * Verifica el correo del usuario con el código almacenado en Redis y, si es
+   * correcto, emite los tokens de sesión.
+   */
+  async verifyEmail(
+    dto: VerifyEmailDto,
+    ctx: RequestContext,
+  ): Promise<AuthTokensResponse> {
+    const email = dto.email.toLowerCase().trim();
+    const user = await this.usersService.findByEmail(email);
+    const key = this.verificationKey(email);
+    const storedCode = await this.redis.get(key);
+
+    if (!user || !storedCode || !this.codesMatch(storedCode, dto.code)) {
+      throw new BadRequestException('Código inválido o expirado');
+    }
+
+    await this.usersService.markEmailVerified(user.id);
+    await this.redis.del(key);
+
+    user.emailVerified = true;
+    return this.issueTokens(user, ctx);
+  }
+
+  /**
+   * Reenvía el código de verificación. La respuesta es genérica para no
+   * revelar si el correo está registrado.
+   */
+  async resendVerification(
+    email: string,
+  ): Promise<{ sent: boolean; message: string }> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const user = await this.usersService.findByEmail(normalizedEmail);
+
+    if (user && !user.emailVerified) {
+      await this.storeAndSendVerificationCode(user.email, user.name);
+    }
+
+    return {
+      sent: true,
+      message:
+        'Si el correo está registrado y aún no ha sido verificado, recibirás un nuevo código de verificación',
+    };
+  }
+
+  /**
+   * Genera una contraseña temporal, la envía por correo y obliga al usuario a
+   * cambiarla en su próximo inicio de sesión. No revela si el correo existe.
+   */
+  async forgotPassword(
+    email: string,
+  ): Promise<{ sent: boolean; message: string }> {
+    const normalizedEmail = email.toLowerCase().trim();
+    const genericMessage = `Si el correo ${normalizedEmail} existe, recibirás un correo con tu nueva contraseña temporal`;
+    const user = await this.usersService.findByEmail(normalizedEmail);
+
+    if (!user) {
+      return { sent: true, message: genericMessage };
+    }
+
+    const previousPasswordHash = user.passwordHash;
+    const previousMustChangePassword = user.mustChangePassword;
+
+    try {
+      const temporaryPassword = generateTemporaryPassword(8);
+      const passwordHash = await argon2.hash(temporaryPassword, {
+        type: argon2.argon2id,
+      });
+
+      await this.usersService.setPassword(user.id, passwordHash, true);
+
+      try {
+        await this.mailService.sendTemporaryPassword({
+          to: user.email,
+          name: user.name,
+          temporaryPassword,
+        });
+      } catch (error) {
+        await this.usersService.setPassword(
+          user.id,
+          previousPasswordHash,
+          previousMustChangePassword,
+        );
+        throw error;
+      }
+
+      await this.logoutAll(user.id);
+
+      return { sent: true, message: genericMessage };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `No se pudo procesar la recuperación de contraseña para ${normalizedEmail}: ${message}`,
+      );
+      return {
+        sent: false,
+        message: 'No se pudo procesar la solicitud. Intenta de nuevo más tarde',
+      };
+    }
+  }
+
+  private async storeAndSendVerificationCode(
+    email: string,
+    name: string,
+  ): Promise<boolean> {
+    const ttlMinutes = this.configService.get<number>(
+      'EMAIL_VERIFICATION_CODE_TTL_MINUTES',
+      15,
+    );
+    const code = generateVerificationCode(6);
+
+    await this.redis.set(
+      this.verificationKey(email),
+      code,
+      'EX',
+      ttlMinutes * 60,
+    );
+
+    try {
+      await this.mailService.sendVerificationCode({
+        to: email,
+        name,
+        code,
+        expiresInMinutes: ttlMinutes,
+      });
+      return true;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `No se pudo enviar el código de verificación a ${email}: ${message}`,
+      );
+      return false;
+    }
+  }
+
+  private verificationKey(email: string): string {
+    return `${EMAIL_VERIFICATION_KEY_PREFIX}${email.toLowerCase().trim()}`;
+  }
+
+  private codesMatch(storedCode: string, providedCode: string): boolean {
+    const stored = Buffer.from(storedCode);
+    const provided = Buffer.from(providedCode);
+    return (
+      stored.length === provided.length && timingSafeEqual(stored, provided)
+    );
   }
 
   /**
    * Inicio de sesión con validación de bloqueos de IP y cuenta.
    */
-  async login(dto: LoginDto, ctx: RequestContext): Promise<AuthTokensResponse> {
+  async login(dto: LoginDto, ctx: RequestContext): Promise<LoginResponse> {
     // 1. Validar que la IP no esté bloqueada
     await this.assertIpNotBlocked(ctx.ip);
 
@@ -107,9 +291,15 @@ export class AuthService {
       throw new UnauthorizedException('Credenciales inválidas');
     }
 
-    // 5. Login exitoso: reiniciar solo la cuenta (la IP no se reinicia)
+    // 5. Credenciales correctas: reiniciar solo la cuenta (la IP no se reinicia)
     await this.usersService.resetFailedAttempts(user);
 
+    // 6. El frontend debe verificar el correo antes de obtener tokens
+    if (!user.emailVerified) {
+      return { email: user.email, emailVerified: false };
+    }
+
+    // 7. Si debe cambiar la contraseña, se emiten tokens y el flag viaja en user
     return this.issueTokens(user, ctx);
   }
 
@@ -172,6 +362,8 @@ export class AuthService {
         email: user.email,
         name: user.name,
         timezone: user.timezone,
+        emailVerified: user.emailVerified ?? false,
+        mustChangePassword: user.mustChangePassword ?? false,
       },
     };
   }

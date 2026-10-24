@@ -155,6 +155,7 @@ export class UsersService {
     user.passwordHash = await argon2.hash(dto.newPassword, {
       type: argon2.argon2id,
     });
+    user.mustChangePassword = false;
 
     await this.userRepository.save(user);
 
@@ -163,6 +164,30 @@ export class UsersService {
     }
 
     return { message: 'Contraseña actualizada correctamente' };
+  }
+
+  /**
+   * Marca el correo del usuario como verificado.
+   */
+  async markEmailVerified(userId: string): Promise<void> {
+    await this.userRepository.update(
+      { id: userId, isDeleted: false },
+      { emailVerified: true },
+    );
+  }
+
+  /**
+   * Establece un nuevo hash de contraseña y el indicador de cambio obligatorio.
+   */
+  async setPassword(
+    userId: string,
+    passwordHash: string,
+    mustChangePassword: boolean,
+  ): Promise<void> {
+    await this.userRepository.update(
+      { id: userId, isDeleted: false },
+      { passwordHash, mustChangePassword },
+    );
   }
 
   /**

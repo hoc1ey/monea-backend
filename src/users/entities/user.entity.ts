@@ -42,6 +42,12 @@ export class User extends BaseEntity {
   @Column({ type: 'timestamptz', nullable: true, default: null })
   lastLoginAt: Date | null;
 
+  @Column({ type: 'boolean', default: false })
+  emailVerified: boolean;
+
+  @Column({ type: 'boolean', default: false })
+  mustChangePassword: boolean;
+
   @OneToMany(() => RefreshToken, (token) => token.user)
   refreshTokens: Relation<RefreshToken[]>;
 

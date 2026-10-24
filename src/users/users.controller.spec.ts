@@ -37,7 +37,7 @@ describe('UsersController', () => {
     expect(result.message).toBe('Perfil actualizado correctamente');
   });
 
-  it('changePassword should return success message and revoke all sessions', async () => {
+  it('changePassword should return success message and revoke all sessions by default', async () => {
     const result = await controller.changePassword('user-1', {
       currentPassword: 'OldPassword123',
       newPassword: 'NewPassword123',
@@ -47,6 +47,42 @@ describe('UsersController', () => {
       'user-1',
       { currentPassword: 'OldPassword123', newPassword: 'NewPassword123' },
       expect.any(Function),
+    );
+  });
+
+  it('changePassword should revoke all sessions when deleteAllSessions=true', async () => {
+    await controller.changePassword('user-1', {
+      currentPassword: 'OldPassword123',
+      newPassword: 'NewPassword123',
+      deleteAllSessions: true,
+    });
+
+    expect(mockUsersService.changePassword).toHaveBeenCalledWith(
+      'user-1',
+      {
+        currentPassword: 'OldPassword123',
+        newPassword: 'NewPassword123',
+        deleteAllSessions: true,
+      },
+      expect.any(Function),
+    );
+  });
+
+  it('changePassword should keep sessions when deleteAllSessions=false', async () => {
+    await controller.changePassword('user-1', {
+      currentPassword: 'OldPassword123',
+      newPassword: 'NewPassword123',
+      deleteAllSessions: false,
+    });
+
+    expect(mockUsersService.changePassword).toHaveBeenCalledWith(
+      'user-1',
+      {
+        currentPassword: 'OldPassword123',
+        newPassword: 'NewPassword123',
+        deleteAllSessions: false,
+      },
+      undefined,
     );
   });
 });
