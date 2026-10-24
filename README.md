@@ -55,6 +55,14 @@ cp .env.example .env
 | `IP_LOCK_WINDOW_MINUTES` | Sí | Ventana para contar fallos por IP |
 | `IP_LOCK_MINUTES` | Sí | Duración del bloqueo por IP |
 | `FIREBASE_SERVICE_ACCOUNT_BASE64` | Sí | Service account de FCM en Base64 (puede ser `e30=` en local) |
+| `MAIL_HOST` | Sí | Host SMTP (ej. `smtp.gmail.com`) |
+| `MAIL_PORT` | Sí | Puerto SMTP (ej. `587` o `465`) |
+| `MAIL_SECURE` | Sí | `true` para SMTP sobre TLS directo (puerto 465) |
+| `MAIL_USER` | Sí | Usuario SMTP |
+| `MAIL_PASSWORD` | Sí | Contraseña o app password SMTP |
+| `MAIL_FROM` | Sí | Remitente de los correos (correo válido) |
+| `MAIL_FROM_NAME` | No | Nombre visible del remitente (default `Monea`) |
+| `EMAIL_VERIFICATION_CODE_TTL_MINUTES` | No | Vigencia del código de verificación (default `15`) |
 | `DEFAULT_TIMEZONE` | Sí | Zona horaria IANA por defecto (ej. `America/Bogota`) |
 | `SCHEDULER_ENABLED` | Sí | Habilita los schedulers de recordatorios y recurrencias |
 

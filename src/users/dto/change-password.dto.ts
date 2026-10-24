@@ -1,5 +1,12 @@
-import { IsNotEmpty, IsString, Matches, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsBoolean,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  Matches,
+  MinLength,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class ChangePasswordDto {
   @ApiProperty({ example: 'ClaveActual123', description: 'Contraseña actual del usuario' })
@@ -17,4 +24,14 @@ export class ChangePasswordDto {
     message: 'La nueva contraseña debe incluir al menos una mayúscula, una minúscula y un número',
   })
   newPassword: string;
+
+  @ApiPropertyOptional({
+    example: true,
+    default: true,
+    description:
+      'Si es true, cierra todas las sesiones e invalida todos los tokens del usuario. En el flujo de cambio obligatorio SIEMPRE debe enviarse true.',
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'deleteAllSessions debe ser un valor booleano' })
+  deleteAllSessions?: boolean;
 }

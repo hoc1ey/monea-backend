@@ -18,6 +18,9 @@ import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
 import { RefreshTokenDto } from './dto/refresh-token.dto.js';
 import { LogoutDto } from './dto/logout.dto.js';
+import { VerifyEmailDto } from './dto/verify-email.dto.js';
+import { ResendVerificationDto } from './dto/resend-verification.dto.js';
+import { ForgotPasswordDto } from './dto/forgot-password.dto.js';
 import { IsPublic } from '../common/decorators/is-public.decorator.js';
 import { CurrentUser } from '../common/decorators/current-user.decorator.js';
 
@@ -29,16 +32,63 @@ export class AuthController {
   @IsPublic()
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  @ApiOperation({ summary: 'Registrar un nuevo usuario' })
+  @ApiOperation({ summary: 'Registrar un nuevo usuario y enviar código de verificación' })
   @SwaggerApiResponse({ status: 201, description: 'Usuario registrado correctamente' })
-  async register(@Body() dto: RegisterDto, @Req() req: Request) {
-    const tokens = await this.authService.register(dto, {
+  @SwaggerApiResponse({ status: 409, description: 'El correo ya está registrado' })
+  async register(@Body() dto: RegisterDto) {
+    const result = await this.authService.register(dto);
+    return {
+      data: result,
+      message:
+        'Usuario registrado correctamente. Revisa tu correo para verificar la cuenta',
+    };
+  }
+
+  @IsPublic()
+  @Post('verify')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Verificar el correo con el código de 6 dígitos e iniciar sesión',
+  })
+  @SwaggerApiResponse({
+    status: 200,
+    description: 'Correo verificado correctamente con tokens de sesión',
+  })
+  @SwaggerApiResponse({ status: 400, description: 'Código inválido o expirado' })
+  async verify(@Body() dto: VerifyEmailDto, @Req() req: Request) {
+    const tokens = await this.authService.verifyEmail(dto, {
       ip: req.ip ?? '',
       userAgent: req.headers['user-agent'] ?? '',
     });
     return {
       data: tokens,
-      message: 'Usuario registrado correctamente',
+      message: 'Correo verificado correctamente',
+    };
+  }
+
+  @IsPublic()
+  @Post('resend-verification')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Reenviar el código de verificación al correo' })
+  @SwaggerApiResponse({ status: 200, description: 'Solicitud procesada' })
+  async resendVerification(@Body() dto: ResendVerificationDto) {
+    const result = await this.authService.resendVerification(dto.email);
+    return {
+      data: { sent: result.sent },
+      message: result.message,
+    };
+  }
+
+  @IsPublic()
+  @Post('forgot-password')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Enviar una contraseña temporal al correo registrado' })
+  @SwaggerApiResponse({ status: 200, description: 'Solicitud procesada' })
+  async forgotPassword(@Body() dto: ForgotPasswordDto) {
+    const result = await this.authService.forgotPassword(dto.email);
+    return {
+      data: { sent: result.sent },
+      message: result.message,
     };
   }
 
@@ -51,13 +101,21 @@ export class AuthController {
   @SwaggerApiResponse({ status: 423, description: 'Cuenta bloqueada temporalmente' })
   @SwaggerApiResponse({ status: 429, description: 'IP bloqueada por demasiados intentos' })
   async login(@Body() dto: LoginDto, @Req() req: Request) {
-    const tokens = await this.authService.login(dto, {
+    const result = await this.authService.login(dto, {
       ip: req.ip ?? '',
       userAgent: req.headers['user-agent'] ?? '',
     });
+
+    if ('accessToken' in result) {
+      return {
+        data: result,
+        message: 'Sesión iniciada correctamente',
+      };
+    }
+
     return {
-      data: tokens,
-      message: 'Sesión iniciada correctamente',
+      data: result,
+      message: 'Debes verificar tu correo electrónico para iniciar sesión',
     };
   }
 

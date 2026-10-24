@@ -47,8 +47,14 @@ export class UsersController {
     @CurrentUser('id') userId: string,
     @Body() dto: ChangePasswordDto,
   ) {
-    await this.usersService.changePassword(userId, dto, (uid) =>
-      this.authService.logoutAll(uid).then(() => undefined),
+    const deleteAllSessions = dto.deleteAllSessions ?? true;
+
+    await this.usersService.changePassword(
+      userId,
+      dto,
+      deleteAllSessions
+        ? (uid) => this.authService.logoutAll(uid).then(() => undefined)
+        : undefined,
     );
     return {
       data: null,

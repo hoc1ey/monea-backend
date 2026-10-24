@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Verifica tu correo electrónico</title>
+  </head>
+  <body style="margin: 0; padding: 0; background-color: #fef1fb; font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #580034;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fef1fb;">
+      <tr>
+        <td align="center" style="padding: 36px 16px;">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width: 600px; background-color: #ffffff; border-radius: 18px; overflow: hidden; box-shadow: 0 12px 32px rgba(88, 0, 52, 0.12);">
+            <tr>
+              <td align="center" style="background-color: #ac086b; background: linear-gradient(135deg, #e0068c 0%, #ac086b 55%, #580034 100%); padding: 36px 28px;">
+                {{#if hasLogo}}
+                <img src="cid:{{logoCid}}" alt="Monea" width="72" height="72" style="display: block; width: 72px; height: 72px; object-fit: contain; border-radius: 16px; background-color: #ffffff; padding: 8px; margin-bottom: 18px;" />
+                {{else}}
+                <div style="display: inline-block; padding: 14px 22px; border-radius: 14px; background-color: #ffffff; color: #ac086b; font-size: 26px; font-weight: 800; letter-spacing: 1px; margin-bottom: 18px;">Monea</div>
+                {{/if}}
+                <h1 style="margin: 0; color: #ffffff; font-size: 25px; line-height: 1.3; font-weight: 700;">Verifica tu correo electrónico</h1>
+                <p style="margin: 10px 0 0; color: #ffcaf3; font-size: 15px; line-height: 1.5;">Estás a un paso de empezar a organizar tus finanzas.</p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 40px 36px 32px;">
+                <p style="margin: 0 0 16px; font-size: 16px; line-height: 1.6;">Hola <strong>{{name}}</strong>,</p>
+                <p style="margin: 0 0 26px; font-size: 15px; line-height: 1.7; color: #8f0c5b;">
+                  Gracias por registrarte en <strong>Monea</strong>. Usa el siguiente código para confirmar que este correo es tuyo:
+                </p>
+
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                  <tr>
+                    <td align="center" style="background-color: #fef1fb; border: 2px dashed #ff64d4; border-radius: 14px; padding: 26px 16px;">
+                      <p style="margin: 0 0 10px; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; color: #e0068c; font-weight: 700;">Tu código de verificación</p>
+                      <div style="font-size: 40px; line-height: 1.1; font-weight: 800; letter-spacing: 12px; color: #ac086b; font-family: 'Courier New', Courier, monospace;">{{code}}</div>
+                    </td>
+                  </tr>
+                </table>
+
+                <p style="margin: 26px 0 0; font-size: 14px; line-height: 1.7; color: #8f0c5b;">
+                  Este código vence en <strong style="color: #e0068c;">{{expiresInMinutes}} minutos</strong>. Si no solicitaste este registro, puedes ignorar este correo.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 0 36px 32px;">
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background-color: #fee5f8; border-radius: 12px;">
+                  <tr>
+                    <td style="padding: 16px 20px; font-size: 13px; line-height: 1.6; color: #8f0c5b;">
+                      Por seguridad, nunca compartas este código con nadie. Nuestro equipo jamás te lo pedirá.
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td align="center" style="background-color: #580034; padding: 24px 32px;">
+                <p style="margin: 0 0 6px; font-size: 15px; font-weight: 700; color: #ffffff;">Monea</p>
+                <p style="margin: 0; font-size: 12px; line-height: 1.6; color: #ffcaf3;">Tus finanzas, claras y bajo control.</p>
+                <p style="margin: 10px 0 0; font-size: 11px; color: #ff9fe6;">© {{year}} Monea. Todos los derechos reservados.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>
