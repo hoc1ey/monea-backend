@@ -28,11 +28,9 @@ export interface TemporaryPasswordEmailParams {
 @Injectable()
 export class MailService {
   private readonly logger = new Logger(MailService.name);
-  private readonly logoPath: string | null;
 
   constructor(private readonly mailerService: MailerService) {
-    this.logoPath = this.findLogo();
-    if (!this.logoPath) {
+    if (!this.findLogo()) {
       this.logger.warn(
         `No se encontró el logo de la app en ${MAIL_ASSETS_DIR}. Los correos se enviarán sin logo.`,
       );
@@ -54,7 +52,7 @@ export class MailService {
         code,
         expiresInMinutes,
         year: new Date().getFullYear(),
-        hasLogo: this.logoPath !== null,
+        hasLogo: this.findLogo() !== null,
         logoCid: MAIL_LOGO_CID,
       },
       attachments: this.buildLogoAttachments(),
@@ -74,7 +72,7 @@ export class MailService {
         name,
         temporaryPassword,
         year: new Date().getFullYear(),
-        hasLogo: this.logoPath !== null,
+        hasLogo: this.findLogo() !== null,
         logoCid: MAIL_LOGO_CID,
       },
       attachments: this.buildLogoAttachments(),
@@ -86,12 +84,13 @@ export class MailService {
     path: string;
     cid: string;
   }[] {
-    if (!this.logoPath) return [];
+    const logoPath = this.findLogo();
+    if (!logoPath) return [];
 
     return [
       {
-        filename: basename(this.logoPath),
-        path: this.logoPath,
+        filename: basename(logoPath),
+        path: logoPath,
         cid: MAIL_LOGO_CID,
       },
     ];
