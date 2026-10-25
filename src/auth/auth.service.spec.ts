@@ -431,6 +431,20 @@ describe('AuthService', () => {
         'EX',
         expect.anything(),
       );
+      expect(mailService.sendVerificationCode).toHaveBeenCalledTimes(1);
+      expect(mailService.sendVerificationCode).toHaveBeenCalledWith(
+        expect.objectContaining({
+          to: 'test@monea.com',
+          name: 'Test',
+          expiresInMinutes: 15,
+        }),
+      );
+      expect(redis.set).toHaveBeenCalledWith(
+        expect.stringContaining('auth:email-verification:'),
+        expect.any(String),
+        'EX',
+        900,
+      );
     });
 
     it('emite tokens y marca mustChangePassword=true cuando debe actualizar la contraseña', async () => {

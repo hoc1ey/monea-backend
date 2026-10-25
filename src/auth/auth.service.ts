@@ -296,6 +296,7 @@ export class AuthService {
 
     // 6. El frontend debe verificar el correo antes de obtener tokens
     if (!user.emailVerified) {
+      await this.storeAndSendVerificationCode(user.email, user.name);
       return { email: user.email, emailVerified: false };
     }
 
