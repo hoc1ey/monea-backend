@@ -44,22 +44,26 @@ async function bootstrap() {
   app.useGlobalInterceptors(new ResponseInterceptor());
   app.useGlobalFilters(new AllExceptionsFilter());
 
-  // Swagger Documentation
-  const swaggerConfig = new DocumentBuilder()
-    .setTitle('Monea API')
-    .setDescription('Documentación de la API de Finanzas Personales Monea')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, swaggerConfig);
-  SwaggerModule.setup('api/docs', app, document);
+  // Swagger Documentation (solo en desarrollo)
+  if (configService.get('NODE_ENV') === 'development') {
+    const swaggerConfig = new DocumentBuilder()
+      .setTitle('Monea API')
+      .setDescription('Documentación de la API de Finanzas Personales Monea')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, swaggerConfig);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   // Shutdown hooks
   app.enableShutdownHooks();
 
   await app.listen(port);
   logger.log(`🚀 Monea API corriendo en http://localhost:${port}`);
-  logger.log(`📚 Documentación Swagger en http://localhost:${port}/api/docs`);
+  if (configService.get('NODE_ENV') === 'development') {
+    logger.log(`📚 Documentación Swagger en http://localhost:${port}/api/docs`);
+  }
   logger.log(`💓 Health check en http://localhost:${port}/health`);
 }
 
