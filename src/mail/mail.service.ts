@@ -79,6 +79,21 @@ export class MailService {
     });
   }
 
+  async sendTestEmail({ to, name }: { to: string; name: string }): Promise<void> {
+    await this.mailerService.sendMail({
+      to,
+      subject: 'Correo de prueba - Monea',
+      template: 'test-email',
+      context: {
+        name,
+        year: new Date().getFullYear(),
+        hasLogo: this.findLogo() !== null,
+        logoCid: MAIL_LOGO_CID,
+      },
+      attachments: this.buildLogoAttachments(),
+    });
+  }
+
   private buildLogoAttachments(): {
     filename: string;
     path: string;

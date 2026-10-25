@@ -3,10 +3,13 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { MailerModule } from '@nestjs-modules/mailer';
 import { HandlebarsAdapter } from '@nestjs-modules/mailer/adapters/handlebars.adapter.js';
 import { MailService } from './mail.service.js';
+import { MailController } from './mail.controller.js';
 import { MAIL_TEMPLATES_DIR } from './mail.constants.js';
+import { UsersModule } from '../users/users.module.js';
 
 @Module({
   imports: [
+    UsersModule,
     MailerModule.forRootAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
@@ -33,6 +36,7 @@ import { MAIL_TEMPLATES_DIR } from './mail.constants.js';
       }),
     }),
   ],
+  controllers: [MailController],
   providers: [MailService],
   exports: [MailService],
 })
