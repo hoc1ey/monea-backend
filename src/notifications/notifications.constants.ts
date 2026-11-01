@@ -10,6 +10,7 @@ export enum ReminderType {
   COLLECTION = 'COLLECTION',
   LOAN = 'LOAN',
   DEBT = 'DEBT',
+  EXPENSE_GENERATED = 'EXPENSE_GENERATED',
 }
 
 export enum ReminderStatus {

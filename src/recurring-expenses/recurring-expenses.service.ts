@@ -319,6 +319,7 @@ export class RecurringExpensesService {
     const rule = this.buildRule(config);
     let generated = 0;
     let occurrences = 0;
+    let wasCreated = false;
 
     while (
       occurrences < MAX_OCCURRENCES_PER_RUN &&
@@ -375,6 +376,7 @@ export class RecurringExpensesService {
             manager,
           );
           generated += 1;
+          wasCreated = true;
         }
 
         config.lastGeneratedAt = new Date();
@@ -386,6 +388,11 @@ export class RecurringExpensesService {
         await manager.getRepository(RecurringExpenseConfig).save(config);
       });
 
+      if (wasCreated) {
+        await this.notifyExpenseGenerated(config);
+        wasCreated = false;
+      }
+
       occurrences += 1;
 
       if (!config.isActive) {
@@ -396,7 +403,7 @@ export class RecurringExpensesService {
         break;
       }
 
-      await this.scheduleReminder(config, timezone);
+      await this.scheduleReminder(config, timezone, false);
     }
 
     return generated;
@@ -441,9 +448,17 @@ export class RecurringExpensesService {
     return RecurrenceUtil.localDateToUtc(config.startDate, timezone);
   }
 
+  /**
+   * Programa el recordatorio del siguiente ciclo. Con cancelExisting=true cancela
+   * los PENDING previos antes de crear el nuevo (creación, edición, reactivación).
+   * En la generación desde el scheduler se usa false para conservar el recordatorio
+   * del ciclo en curso (p. ej. SAME_DAY de hoy) y solo añadir el del siguiente.
+   * Si el recordatorio está deshabilitado/incompleto, cancela los PENDING siempre.
+   */
   private async scheduleReminder(
     config: RecurringExpenseConfig,
     timezone: string,
+    cancelExisting = true,
   ) {
     if (
       !config.reminderEnabled ||
@@ -470,17 +485,38 @@ export class RecurringExpensesService {
       ? `Se aproxima el egreso recurrente "${config.name}". Recuerda definir el monto.`
       : `Se aproxima el egreso recurrente "${config.name}" por ${config.amount ?? 0}.`;
 
-    return this.reminderService.reschedule(
-      ReminderType.RECURRING_EXPENSE,
+    const input = {
+      userId: config.userId,
+      type: ReminderType.RECURRING_EXPENSE,
+      sourceId: config.id,
+      title: `Egreso recurrente ${config.name}`,
+      body,
+      scheduledAt,
+    };
+
+    return cancelExisting
+      ? this.reminderService.reschedule(ReminderType.RECURRING_EXPENSE, config.id, input)
+      : this.reminderService.scheduleWithoutCancel(input);
+  }
+
+  /**
+   * Notifica al usuario (vía la tabla de reminders y el poller por minuto) que se
+   * registró el egreso recurrente de este ciclo. Usa el tipo EXPENSE_GENERATED para
+   * que el ciclo de vida de los recordatorios RECURRING_EXPENSE no lo cancele.
+   */
+  private async notifyExpenseGenerated(
+    config: RecurringExpenseConfig,
+  ): Promise<void> {
+    const body = config.isVariableAmount
+      ? `Se registró el egreso recurrente "${config.name}". Recuerda definir el monto.`
+      : `Se registró el egreso recurrente "${config.name}" por ${config.amount ?? 0}.`;
+
+    await this.reminderService.notifyNow(
+      config.userId,
+      ReminderType.EXPENSE_GENERATED,
       config.id,
-      {
-        userId: config.userId,
-        type: ReminderType.RECURRING_EXPENSE,
-        sourceId: config.id,
-        title: `Egreso recurrente ${config.name}`,
-        body,
-        scheduledAt,
-      },
+      `Egreso recurrente ${config.name}`,
+      body,
     );
   }
 
