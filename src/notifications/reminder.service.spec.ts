@@ -18,6 +18,7 @@ describe('ReminderService', () => {
       create: vi.fn(),
       save: vi.fn(),
       find: vi.fn(),
+      findOne: vi.fn(),
       update: vi.fn(),
       manager: {
         connection: {
@@ -111,6 +112,92 @@ describe('ReminderService', () => {
       });
 
       expect(result).toBeNull();
+      expect(mockReminderRepo.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('notifyNow', () => {
+    it('debe crear un recordatorio PENDING para despacho inmediato', async () => {
+      const reminder = { id: 'rem-3' } as Reminder;
+      let captured: any;
+
+      vi.mocked(mockReminderRepo.create!).mockImplementation((input) => {
+        captured = input;
+        return reminder;
+      });
+      vi.mocked(mockReminderRepo.save!).mockResolvedValue(reminder);
+
+      const result = await service.notifyNow(
+        'user-1',
+        ReminderType.EXPENSE_GENERATED,
+        'config-1',
+        'Egreso recurrente Internet',
+        'Se registró el egreso recurrente "Internet" por 27.6.',
+      );
+
+      expect(result).toBe(reminder);
+      expect(captured).toMatchObject({
+        userId: 'user-1',
+        type: ReminderType.EXPENSE_GENERATED,
+        sourceId: 'config-1',
+        status: ReminderStatus.PENDING,
+        attempts: 0,
+      });
+      expect((captured as Reminder).scheduledAt.getTime()).toBeLessThanOrEqual(
+        Date.now(),
+      );
+    });
+  });
+
+  describe('scheduleWithoutCancel', () => {
+    const futureDate = new Date(Date.now() + 1000 * 60 * 60 * 24);
+    futureDate.setUTCMinutes(0, 0, 0);
+
+    const buildInput = () => ({
+      userId: 'user-1',
+      type: ReminderType.RECURRING_EXPENSE,
+      sourceId: 'config-1',
+      title: 'Egreso recurrente Internet',
+      body: 'Se aproxima el egreso recurrente "Internet" por 27.6.',
+      scheduledAt: futureDate,
+    });
+
+    it('debe crear el recordatorio sin cancelar los pendientes previos', async () => {
+      const reminder = { id: 'rem-4' } as Reminder;
+
+      vi.mocked(mockReminderRepo.findOne!).mockResolvedValue(null);
+      vi.mocked(mockReminderRepo.create!).mockReturnValue(reminder);
+      vi.mocked(mockReminderRepo.save!).mockResolvedValue(reminder);
+
+      const result = await service.scheduleWithoutCancel(buildInput());
+
+      expect(result).toBe(reminder);
+      expect(mockReminderRepo.update).not.toHaveBeenCalled();
+      expect(mockReminderRepo.create).toHaveBeenCalled();
+    });
+
+    it('debe devolver el existente en lugar de duplicar', async () => {
+      const existing = { id: 'rem-5' } as Reminder;
+
+      vi.mocked(mockReminderRepo.findOne!).mockResolvedValue(existing);
+      vi.mocked(mockReminderRepo.create!).mockReturnValue({} as Reminder);
+      vi.mocked(mockReminderRepo.save!).mockResolvedValue({} as Reminder);
+
+      const result = await service.scheduleWithoutCancel(buildInput());
+
+      expect(result).toBe(existing);
+      expect(mockReminderRepo.create).not.toHaveBeenCalled();
+      expect(mockReminderRepo.save).not.toHaveBeenCalled();
+    });
+
+    it('debe retornar null e ignorar si scheduledAt ya pasó', async () => {
+      const result = await service.scheduleWithoutCancel({
+        ...buildInput(),
+        scheduledAt: new Date(Date.now() - 1000 * 60 * 60),
+      });
+
+      expect(result).toBeNull();
+      expect(mockReminderRepo.findOne).not.toHaveBeenCalled();
       expect(mockReminderRepo.create).not.toHaveBeenCalled();
     });
   });

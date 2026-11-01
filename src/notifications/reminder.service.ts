@@ -62,6 +62,76 @@ export class ReminderService {
   }
 
   /**
+   * Crea un recordatorio para despacho inmediato: queda PENDING con scheduledAt = ahora,
+   * de modo que el ReminderScheduler (cada minuto) lo envía en su próxima pasada.
+   * No fuerza minute=0 ni valida fecha futura; lo cancela por `cancelBySource` normalmente.
+   */
+  async notifyNow(
+    userId: string,
+    type: ReminderType,
+    sourceId: string,
+    title: string,
+    body: string,
+  ): Promise<Reminder> {
+    const reminder = this.reminderRepository.create({
+      userId,
+      type,
+      sourceId,
+      title,
+      body,
+      scheduledAt: new Date(),
+      status: ReminderStatus.PENDING,
+      attempts: 0,
+    });
+
+    return this.reminderRepository.save(reminder);
+  }
+
+  /**
+   * Programa un recordatorio del siguiente ciclo SIN cancelar los PENDING previos,
+   * para que los recordatorios de ciclos aún no despachados (p. ej. SAME_DAY de hoy)
+   * no se pierdan cuando el scheduler de egresos genera la siguiente ocurrencia.
+   * Ignora si scheduledAt ya pasó y evita duplicados exactos (type + sourceId + scheduledAt).
+   */
+  async scheduleWithoutCancel(
+    input: ScheduleReminderInput,
+  ): Promise<Reminder | null> {
+    const scheduledAt = new Date(input.scheduledAt);
+    scheduledAt.setUTCMinutes(0, 0, 0);
+
+    if (scheduledAt.getTime() <= Date.now()) {
+      return null;
+    }
+
+    const existing = await this.reminderRepository.findOne({
+      where: {
+        type: input.type,
+        sourceId: input.sourceId,
+        scheduledAt,
+        status: ReminderStatus.PENDING,
+        isDeleted: false,
+      },
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    const reminder = this.reminderRepository.create({
+      userId: input.userId,
+      type: input.type,
+      sourceId: input.sourceId,
+      title: input.title,
+      body: input.body,
+      scheduledAt,
+      status: ReminderStatus.PENDING,
+      attempts: 0,
+    });
+
+    return this.reminderRepository.save(reminder);
+  }
+
+  /**
    * Cancela los recordatorios pendientes asociados a una entidad origen polimórfica (type + sourceId).
    * Marca status = CANCELLED sin borrar el registro de la base de datos.
    */
