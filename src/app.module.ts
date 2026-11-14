@@ -22,6 +22,7 @@ import { LoansModule } from './loans/loans.module.js';
 import { DebtsModule } from './debts/debts.module.js';
 import { ShoppingListsModule } from './shopping-lists/shopping-lists.module.js';
 import { TransfersModule } from './transfers/transfers.module.js';
+import { ReportsModule } from './reports/reports.module.js';
 import { MailModule } from './mail/mail.module.js';
 import { JwtAuthGuard } from './common/guards/jwt-auth.guard.js';
 import { RateLimitGuard } from './common/guards/rate-limit.guard.js';
@@ -85,6 +86,7 @@ import { REDIS_CLIENT } from './config/redis.module.js';
     DebtsModule,
     ShoppingListsModule,
     TransfersModule,
+    ReportsModule,
     MailModule,
   ],
   controllers: [],
