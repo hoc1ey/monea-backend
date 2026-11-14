@@ -1137,6 +1137,33 @@ Prueba adicional de error interno: apaga Redis y llama `GET /users/me` → debe 
 
 ---
 
+## F18 — Reportes
+
+Reutiliza los datos de F04–F12. Ten a mano los totales ya verificados del mes en curso.
+
+### F18-T1 · Resumen del mes actual
+- **GET** `{{baseUrl}}/reports/monthly-summary` · Bearer
+- **Esperado 200**
+```json
+{ "success": true, "statusCode": 200,
+  "data": { "period": "2026-11", "totalIncomes": 0, "totalExpenses": 0, "net": 0 },
+  "message": "Resumen mensual obtenido correctamente", "errors": null }
+```
+- Los montos deben coincidir con la suma real de `incomes`/`expenses` del mes (egresos incluyen DIFERIDO).
+- Con `?accountId={{accountId}}` → solo esa cuenta; `accountId` de otro usuario → **404**; UUID inválido → **400**.
+
+### F18-T2 · Historial mensual (mes actual + 4 anteriores)
+- **GET** `{{baseUrl}}/reports/monthly-history` · Bearer
+- **Esperado 200**: `data.items` con exactamente **5** ítems ordenados del más antiguo al más reciente; el último `period` es el mes actual; meses sin movimientos en `0` (nunca se omiten).
+
+### F18-T3 · Balance histórico
+- **GET** `{{baseUrl}}/reports/balance-history` · Bearer
+- **Esperado 200**: `data.items` = 5 ítems `{ period, balance }`. El último `balance` debe coincidir con el saldo actual de F02 (`GET /accounts`). Si hay egresos diferidos pagados con tarjeta, el egreso del pago (CORRIENTE) sí descuenta; las cuotas diferidas no.
+- Con `?accountId={{accountId}}` → balance solo de esa cuenta (saldo inicial + ingresos − egresos CORRIENTE de esa cuenta); cuenta ajena → **404**.
+- Sin token → **401** en los tres endpoints.
+
+---
+
 ## Checklist final de aceptación
 
 | Feature | Criterio principal | ✔ |
@@ -1155,3 +1182,4 @@ Prueba adicional de error interno: apaga Redis y llama `GET /users/me` → debe 
 | F11 | Deudas con cuotas; pago crea egreso (supuesto A) | ☐ |
 | F12 | Cierre con XOR precios/total; lista nueva con no comprados; egreso | ☐ |
 | F13 | Soft delete, ownership, sin `userId` en body, formato global | ☐ |
+| F18 | Resumen mensual, historial de 5 meses y balance histórico coherentes con F02 | ☐ |
