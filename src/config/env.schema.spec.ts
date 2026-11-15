@@ -7,6 +7,7 @@ describe('env.schema', () => {
     PORT: '3000',
     DATABASE_URL: 'postgresql://postgres:postgres@localhost:5432/monea_dev',
     DB_SYNCHRONIZE: 'true',
+    DB_SSL: 'false',
     REDIS_URL: 'redis://localhost:6379',
     JWT_ACCESS_SECRET: 'monea_super_secret_access_token_32chars_min',
     JWT_REFRESH_SECRET: 'monea_super_secret_refresh_token_32chars_min',
@@ -42,6 +43,7 @@ describe('env.schema', () => {
     const config = validateEnv(validEnv);
     expect(config.PORT).toBe(3000);
     expect(config.DB_SYNCHRONIZE).toBe(true);
+    expect(config.DB_SSL).toBe(false);
     expect(config.RATE_LIMIT_ENABLED).toBe(true);
     expect(config.SCHEDULER_ENABLED).toBe(true);
   });
